@@ -5,8 +5,8 @@ export async function captureAriaSnapshot(
   context: Context,
   status: string = "",
 ): Promise<ToolResult> {
-  const url = await context.sendSocketMessage("getUrl", undefined);
-  const title = await context.sendSocketMessage("getTitle", undefined);
+  const url = await context.sendSocketMessage("getUrl", {});
+  const title = await context.sendSocketMessage("getTitle", {});
   const snapshot = await context.sendSocketMessage("browser_snapshot", {});
   return {
     content: [

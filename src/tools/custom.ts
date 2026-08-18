@@ -16,7 +16,7 @@ export const getConsoleLogs: Tool = {
       {},
     );
     const text: string = consoleLogs
-      .map((log) => JSON.stringify(log))
+      .map((log: any) => JSON.stringify(log))
       .join("\n");
     return {
       content: [{ type: "text", text }],

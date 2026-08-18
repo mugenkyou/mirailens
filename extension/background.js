@@ -1,9 +1,45 @@
-let ws = null;
+// Initialize persistent control state on startup
+const CONTROL_STATE_KEY = 'controlState';
+let controlState = 'RUNNING'; // default, will be overridden by init
+
+function logControlTransition(prev, next, source) {
+  const ts = new Date().toISOString();
+  console.log(`[${ts}] ${prev} → ${next} source=${source}`);
+}
+
+function persistControlState(state, source) {
+  chrome.storage.local.set({ [CONTROL_STATE_KEY]: state }, () => {
+    // optional callback
+  });
+  logControlTransition(controlState, state, source);
+  controlState = state;
+}
+
+function initControlState() {
+  chrome.storage.local.get([CONTROL_STATE_KEY], (data) => {
+    const stored = data[CONTROL_STATE_KEY];
+    if (!stored) {
+      // No persisted state, start safe STOPPED
+      persistControlState('STOPPED', 'init_no_state');
+    } else if (stored === 'RUNNING') {
+      // Safer default: do not auto‑resume autonomous AI after restart
+      persistControlState('STOPPED', 'init_running_to_stopped');
+    } else {
+      // Restore PAUSED, HUMAN_CONTROL, STOPPED as stored
+      persistControlState(stored, 'init_restore');
+    }
+    // Notify any UI listeners of the restored state
+    sendPopupStatus('Connected');
+  });
+}
+
+// Call init on load
+initControlState();
 let activeTabId = null;
-<<<<<<< HEAD
-let reconnectAttempts = 0;
+let reconnectAttempt = 0;
 let lastErrorMessage = '';
 let serverUrl = 'ws://127.0.0.1:29100';
+// controlState is managed via persistence; default set in initControlState
 
 // ---------- Chrome API helpers (callback-based, safe in MV3) ----------
 function tabsQuery(queryInfo) {
@@ -23,24 +59,14 @@ function scriptingExecuteScript(args) {
 function windowsGetAll() {
   return new Promise((resolve) => chrome.windows.getAll({}, (wins) => resolve(wins || [])));
 }
-=======
-let reconnectAttempt = 0;
->>>>>>> 8f7028ca2d2d93e056d13e8201ee39a6abda8939
 
 function sendPopupStatus(status) {
-  // Use callback to absorb "Receiving end does not exist" when popup isn't open
   try {
-    chrome.runtime.sendMessage({ status }, () => {
-      // Accessing lastError prevents the uncaught promise rejection
-      // when there are no listeners (e.g., popup closed)
+    chrome.runtime.sendMessage({ status, controlState }, () => {
       void chrome.runtime.lastError;
     });
-  } catch (_err) {
-    // ignore sync errors just in case
-  }
+  } catch (_err) {}
 }
-
-// Auto-reconnect disabled; manual connect only
 
 async function getActiveTabId() {
   if (!activeTabId) {
@@ -69,92 +95,140 @@ async function exec(tabId, func, args = []) {
   }
 }
 
-// Handle messages from the MCP server
-function handleMCPMessage(message) {
+function canExecuteAIAction() {
+  if (controlState === 'RUNNING') return { allowed: true };
+  if (controlState === 'PAUSED') return { allowed: false, reason: "AI execution is currently paused", controlState: "PAUSED" };
+  if (controlState === 'HUMAN_CONTROL') return { allowed: false, reason: "Browser is currently under human control", controlState: "HUMAN_CONTROL" };
+  if (controlState === 'STOPPED') return { allowed: false, reason: "AI execution has been emergency stopped", controlState: "STOPPED" };
+  return { allowed: false, reason: "Unknown control state", controlState };
+}
+
+async function handleMCPMessage(message) {
   try {
-    const { type, payload } = message;
+    const { type, payload, id } = message;
     console.log('Received MCP message:', type, payload);
     
-    switch (type) {
-      case 'browser_navigate':
-        handleNavigate(payload);
-        break;
-      case 'browser_go_back':
-        handleGoBack();
-        break;
-      case 'browser_go_forward':
-        handleGoForward();
-        break;
-      case 'browser_wait':
-        handleWait(payload);
-        break;
-      case 'browser_click':
-        handleClick(payload);
-        break;
-      case 'browser_type':
-        handleType(payload);
-        break;
-      case 'browser_hover':
-        handleHover(payload);
-        break;
-      case 'browser_snapshot':
-        handleSnapshot();
-        break;
-      case 'browser_screenshot':
-        handleScreenshot();
-        break;
-      case 'getUrl':
-        handleGetUrl();
-        break;
-      case 'getTitle':
-        handleGetTitle();
-        break;
-      default:
-        console.log('Unknown message type:', type);
+    if (type === 'browser_control') {
+      const { action, source = 'ai' } = payload;
+      if (action === 'RESET_STOP' && source !== 'human') {
+        sendError(id, type, { allowed: false, reason: 'RESET_STOP not permitted from AI', controlState });
+        return;
+      }
+      const prevState = controlState;
+      if (action === 'PAUSE' && controlState !== 'STOPPED') persistControlState('PAUSED', source);
+      else if (action === 'RESUME' && controlState !== 'STOPPED') persistControlState('RUNNING', source);
+      else if (action === 'TAKE_CONTROL' && controlState !== 'STOPPED') persistControlState('HUMAN_CONTROL', source);
+      else if (action === 'RETURN_CONTROL' && controlState !== 'STOPPED') persistControlState('RUNNING', source);
+      else if (action === 'EMERGENCY_STOP') persistControlState('STOPPED', source);
+      else if (action === 'RESET_STOP') persistControlState('RUNNING', source);
+      
+      // If state changed, log already done in persistControlState
+      sendPopupStatus('Connected');
+      sendResponse(id, type, { state: controlState });
+      return;
     }
+    
+    if (type === 'get_control_state') {
+      sendResponse(id, type, { state: controlState });
+      return;
+    }
+
+    // Centralized browser action dispatch
+    const browserHandlers = {
+      browser_navigate: handleNavigate,
+      browser_go_back: handleGoBack,
+      browser_go_forward: handleGoForward,
+      browser_wait: handleWait,
+      browser_click: handleClick,
+      browser_type: handleType,
+      browser_hover: handleHover,
+      browser_snapshot: handleSnapshot,
+      browser_screenshot: handleScreenshot,
+      getUrl: handleGetUrl,
+      getTitle: handleGetTitle,
+      // future actions can be added here
+    };
+
+    const handler = browserHandlers[type];
+    if (!handler) {
+      sendError(id, type, { allowed: false, reason: 'Unknown browser action', controlState });
+      return;
+    }
+
+    // Enforce control gate before executing any browser action
+    const gate = canExecuteAIAction();
+    if (!gate.allowed) {
+      sendError(id, type, gate);
+      return;
+    }
+
+    try {
+      const result = await handler(payload);
+      sendResponse(id, type, result);
+    } catch (e) {
+      console.error('Error handling action', type, e);
+      sendError(id, type, String(e?.message || e));
+    }
+    return;
   } catch (error) {
     console.error('Error handling MCP message:', error);
     lastErrorMessage = String(error?.message || error);
+    sendError(message.id, message.type, lastErrorMessage);
+  }
+}
+
+function sendResponse(id, type, data) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    if (id) {
+      ws.send(JSON.stringify({ id, result: data }));
+    } else {
+      ws.send(JSON.stringify({ type: `${type}_result`, data, timestamp: Date.now() }));
+    }
+  }
+}
+
+function sendError(id, type, error) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    if (id) {
+      ws.send(JSON.stringify({ id, error: typeof error === 'string' ? error : JSON.stringify(error) }));
+    } else {
+      ws.send(JSON.stringify({ type: `${type}_result`, error: typeof error === 'string' ? error : JSON.stringify(error), timestamp: Date.now() }));
+    }
   }
 }
 
 async function handleNavigate(payload) {
   const tabId = await getActiveTabId();
   if (tabId && payload.url) {
-<<<<<<< HEAD
     await tabsUpdate(tabId, { url: payload.url });
-=======
-    await chrome.tabs.update(tabId, { url: payload.url });
-    try {
-      await waitForTabComplete(tabId, 45000);
-    } catch (_e) {
-      // proceed even if timeout; page may still be interactive
-    }
->>>>>>> 8f7028ca2d2d93e056d13e8201ee39a6abda8939
-    sendResult('browser_navigate', true);
+    try { await waitForTabComplete(tabId, 45000); } catch (_e) {}
+    return true;
   }
+  return false;
 }
 
 async function handleGoBack() {
   const tabId = await getActiveTabId();
   if (tabId) {
     await exec(tabId, () => { history.back(); });
-    sendResult('browser_go_back', true);
+    return true;
   }
+  return false;
 }
 
 async function handleGoForward() {
   const tabId = await getActiveTabId();
   if (tabId) {
     await exec(tabId, () => { history.forward(); });
-    sendResult('browser_go_forward', true);
+    return true;
   }
+  return false;
 }
 
 async function handleWait(payload) {
   const time = payload?.time || 1;
   await new Promise(resolve => setTimeout(resolve, time * 1000));
-  sendResult('browser_wait', true);
+  return true;
 }
 
 async function handleClick(payload) {
@@ -168,8 +242,9 @@ async function handleClick(payload) {
       }
       return false;
     }, [payload.selector]);
-    sendResult('browser_click', true);
+    return true;
   }
+  return false;
 }
 
 async function handleType(payload) {
@@ -197,8 +272,9 @@ async function handleType(payload) {
       }
       return false;
     }, [payload.selector, payload.text, payload.mode || 'replace']);
-    sendResult('browser_type', true);
+    return true;
   }
+  return false;
 }
 
 async function handleHover(payload) {
@@ -212,82 +288,44 @@ async function handleHover(payload) {
       }
       return false;
     }, [payload.selector]);
-    sendResult('browser_hover', true);
+    return true;
   }
+  return false;
 }
 
 async function handleSnapshot() {
   const tabId = await getActiveTabId();
   if (tabId) {
-    try {
-<<<<<<< HEAD
-      const result = await exec(tabId, () => {
-        const dims = { width: window.innerWidth, height: window.innerHeight };
-        const scroll = { x: window.scrollX, y: window.scrollY };
-        return {
-          url: window.location.href,
-          title: document.title,
-          viewport: dims,
-          scroll,
-          html: document.documentElement.outerHTML
-        };
-      });
-=======
-      const result = await exec(tabId, () => ({
+    return await exec(tabId, () => {
+      const dims = { width: window.innerWidth, height: window.innerHeight };
+      const scroll = { x: window.scrollX, y: window.scrollY };
+      return {
         url: window.location.href,
         title: document.title,
+        viewport: dims,
+        scroll,
         html: document.documentElement.outerHTML
-      }));
->>>>>>> 8f7028ca2d2d93e056d13e8201ee39a6abda8939
-      sendResult('browser_snapshot', result);
-    } catch (error) {
-      console.error('Snapshot error:', error);
-      sendResult('browser_snapshot', null);
-    }
+      };
+    });
   }
+  return null;
 }
 
 async function handleScreenshot() {
-  try {
-    // Give the tab a brief moment to settle
-    await new Promise(resolve => setTimeout(resolve, 300));
-    const dataUrl = await chrome.tabs.captureVisibleTab(undefined, { format: 'png' });
-    // Return the data URL; the server/tool declares mimeType 'image/png'
-    sendResult('browser_screenshot', dataUrl);
-  } catch (error) {
-    console.error('Screenshot error:', error);
-    sendResult('browser_screenshot', null);
-  }
+  await new Promise(resolve => setTimeout(resolve, 300));
+  return await chrome.tabs.captureVisibleTab(undefined, { format: 'png' });
 }
 
 async function handleGetUrl() {
   const tabId = await getActiveTabId();
-  if (!tabId) {
-    sendResult('getUrl', null);
-    return;
-  }
-  try {
-    const url = await retry(async () => await exec(tabId, () => window.location.href), 3, 300);
-    sendResult('getUrl', url);
-  } catch (error) {
-    console.error('getUrl error:', error);
-    sendResult('getUrl', null);
-  }
+  if (!tabId) return null;
+  return await retry(async () => await exec(tabId, () => window.location.href), 3, 300);
 }
 
 async function handleGetTitle() {
   const tabId = await getActiveTabId();
-  if (!tabId) {
-    sendResult('getTitle', null);
-    return;
-  }
-  try {
-    const title = await retry(async () => await exec(tabId, () => document.title), 3, 300);
-    sendResult('getTitle', title);
-  } catch (error) {
-    console.error('getTitle error:', error);
-    sendResult('getTitle', null);
-  }
+  if (!tabId) return null;
+  return await retry(async () => await exec(tabId, () => document.title), 3, 300);
 }
 
 function waitForTabComplete(tabId, timeoutMs = 45000) {
@@ -329,16 +367,6 @@ async function retry(fn, times = 3, delayMs = 300) {
   return null;
 }
 
-function sendResult(type, data) {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ 
-      type: `${type}_result`, 
-      data,
-      timestamp: Date.now()
-    }));
-  }
-}
-
 function connect() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
     return true;
@@ -350,8 +378,7 @@ function connect() {
     ws.onopen = () => {
       console.log('WebSocket connected to MCP server');
       sendPopupStatus('Connected');
-      reconnectAttempts = 0;
-      // Send initial connection message
+      reconnectAttempt = 0;
       ws.send(JSON.stringify({ 
         type: 'extension_connected',
         data: { version: '1.0.0', capabilities: ['navigate', 'click', 'type', 'hover', 'snapshot'] }
@@ -363,7 +390,6 @@ function connect() {
       sendPopupStatus('Disconnected');
       const attempt = ++reconnectAttempt;
       ws = null;
-      // Backoff up to 30s
       const delay = Math.min(30000, 1000 * Math.pow(2, attempt));
       setTimeout(() => {
         if (!ws) connect();
@@ -394,9 +420,6 @@ function connect() {
   }
 }
 
-// scheduleReconnect removed
-
-// Listen for tab updates to keep track of active tab
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
   activeTabId = activeInfo.tabId;
 });
@@ -407,19 +430,18 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   }
 });
 
-// Handle messages from popup
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.cmd === 'connect') {
     reconnectAttempt = 0;
     const ok = connect();
     sendResponse({ success: ok, lastError: lastErrorMessage });
-    return false; // synchronous response
+    return false;
   }
   
   if (msg?.cmd === 'getStatus') {
     const connected = ws && ws.readyState === WebSocket.OPEN;
-    sendResponse({ status: connected ? 'connected' : 'disconnected', lastError: lastErrorMessage, url: serverUrl });
-    return false; // synchronous response
+    sendResponse({ status: connected ? 'connected' : 'disconnected', lastError: lastErrorMessage, url: serverUrl, controlState });
+    return false;
   }
   
   if (msg?.cmd === 'disconnect') {
@@ -428,13 +450,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       ws = null;
     }
     sendResponse({ success: true });
-    return false; // synchronous response
+    return false;
+  }
+  
+  if (msg?.cmd === 'control_action') {
+    // Messages from popup are human-initiated
+    handleMCPMessage({ type: 'browser_control', payload: { action: msg.action, source: 'human' } });
+    sendResponse({ success: true });
+    return false;
   }
 });
 
-// alarms reconnect removed
-
-// Keyboard commands support
 chrome.commands?.onCommand.addListener((command) => {
   if (command === 'connect') {
     connect();
@@ -447,19 +473,16 @@ chrome.commands?.onCommand.addListener((command) => {
   }
 });
 
-// Disconnect when the last browser window is closed
 chrome.windows.onRemoved.addListener(async () => {
   const windows = await windowsGetAll();
   if (windows.length === 0 && ws) {
     try { ws.close(); } catch (_) {}
     ws = null;
     sendPopupStatus('Disconnected');
-    // Clear connected tab marker so next session starts disconnected
     try { chrome.storage.local.remove('connectedTabId'); } catch (_) {}
   }
 });
 
-// Clear stale state when the extension service worker starts
 chrome.runtime.onStartup?.addListener(() => {
   try { chrome.storage.local.remove('connectedTabId'); } catch (_) {}
   if (ws) {
@@ -478,7 +501,6 @@ chrome.runtime.onInstalled.addListener(() => {
   sendPopupStatus('Disconnected');
 });
 
-// Best-effort cleanup when the service worker is about to be suspended
 chrome.runtime.onSuspend?.addListener(() => {
   try { chrome.storage.local.remove('connectedTabId'); } catch (_) {}
   if (ws) {
@@ -486,6 +508,3 @@ chrome.runtime.onSuspend?.addListener(() => {
     ws = null;
   }
 });
-
-
-
