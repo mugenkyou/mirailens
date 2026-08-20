@@ -6,7 +6,7 @@ import test from 'node:test';
 const nativeSetTimeout = global.setTimeout;
 
 // Helper to load background script in a fresh mock environment
-function loadBackground() {
+function loadBackground(initialStorage = {}) {
   const chromeListeners = {
     message: [],
     tabActivated: [],
@@ -15,10 +15,61 @@ function loadBackground() {
     storageChanged: [],
   };
 
-  const mockStorage = new Map();
+  const mockStorage = new Map(Object.entries(initialStorage));
+  
+  // Override set to trigger onChanged
+  mockStorage.set = (k, v) => {
+    const oldValue = Map.prototype.get.call(mockStorage, k);
+    Map.prototype.set.call(mockStorage, k, v);
+    const changes = { [k]: { oldValue, newValue: v } };
+    chromeListeners.storageChanged.forEach(fn => fn(changes, 'local'));
+    return mockStorage;
+  };
+  
+  mockStorage.delete = (k) => {
+    const oldValue = Map.prototype.get.call(mockStorage, k);
+    const deleted = Map.prototype.delete.call(mockStorage, k);
+    if (deleted) {
+      const changes = { [k]: { oldValue, newValue: undefined } };
+      chromeListeners.storageChanged.forEach(fn => fn(changes, 'local'));
+    }
+    return deleted;
+  };
+
   let popupStatus = null;
   let sentWsMessages = [];
   let wsInstance = null;
+
+  // Track all timers created during this instance's lifetime
+  const activeTimeouts = new Set();
+  const activeIntervals = new Set();
+
+  const originalSetTimeout = global.setTimeout;
+  const originalSetInterval = global.setInterval;
+  const originalClearTimeout = global.clearTimeout;
+  const originalClearInterval = global.clearInterval;
+
+  global.setTimeout = (cb, delay, ...args) => {
+    const id = originalSetTimeout((...a) => {
+      activeTimeouts.delete(id);
+      cb(...a);
+    }, delay, ...args);
+    activeTimeouts.add(id);
+    return id;
+  };
+  global.setInterval = (cb, delay, ...args) => {
+    const id = originalSetInterval(cb, delay, ...args);
+    activeIntervals.add(id);
+    return id;
+  };
+  global.clearTimeout = (id) => {
+    activeTimeouts.delete(id);
+    originalClearTimeout(id);
+  };
+  global.clearInterval = (id) => {
+    activeIntervals.delete(id);
+    originalClearInterval(id);
+  };
 
   const chromeMock = {
     storage: {
@@ -151,6 +202,18 @@ function loadBackground() {
     getWsInstance: () => wsInstance,
     
     cleanup: () => new Promise(resolve => {
+      // Restore globals
+      global.setTimeout = originalSetTimeout;
+      global.setInterval = originalSetInterval;
+      global.clearTimeout = originalClearTimeout;
+      global.clearInterval = originalClearInterval;
+
+      // Clear all active timers for this instance
+      activeTimeouts.forEach(id => originalClearTimeout(id));
+      activeIntervals.forEach(id => originalClearInterval(id));
+      activeTimeouts.clear();
+      activeIntervals.clear();
+
       if (chromeListeners.message[0]) {
         chromeListeners.message[0]({ cmd: 'disconnect' }, {}, () => {
           resolve();
@@ -515,10 +578,10 @@ test('Emergency stop cannot be bypassed by AI resume, and is persistent across r
     // Reload extension simulation: load background again, which should restore from storage
     await instance.cleanup();
     
-    const instance2 = loadBackground();
-    // Pre-set the storage with the values to simulate restored values
-    await instance2.mockStorage.set('isEmergencyStop', true);
-    await instance2.mockStorage.set('controlState', 'BLOCKED');
+    const instance2 = loadBackground({
+      isEmergencyStop: true,
+      controlState: 'BLOCKED'
+    });
     await instance2.connect();
     await new Promise(resolve => nativeSetTimeout(resolve, 15));
     
