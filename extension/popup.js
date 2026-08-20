@@ -5,7 +5,46 @@ document.addEventListener('DOMContentLoaded', () => {
   const disconnectBtn = document.getElementById('disconnect');
   const statusDiv = document.getElementById('status');
   const lastErrorDiv = document.getElementById('last-error');
-  // URL input removed; use default from background
+  
+  // Control Panel Elements
+  const controlPanel = document.getElementById('control-panel');
+  const aiStatusDiv = document.getElementById('ai-status');
+  const btnPause = document.getElementById('btn-pause');
+  const btnResume = document.getElementById('btn-resume');
+  const btnTakeControl = document.getElementById('btn-take-control');
+  const btnReturnControl = document.getElementById('btn-return-control');
+  const btnStop = document.getElementById('btn-stop');
+  const btnReset = document.getElementById('btn-reset');
+
+  function updateControlPanel(state) {
+    if (!state) return;
+    
+    btnPause.classList.add('hidden');
+    btnResume.classList.add('hidden');
+    btnTakeControl.classList.add('hidden');
+    btnReturnControl.classList.add('hidden');
+    btnStop.classList.add('hidden');
+    btnReset.classList.add('hidden');
+
+    if (state === 'RUNNING') {
+      aiStatusDiv.textContent = 'Status: 🟢 AI ACTIVE';
+      btnPause.classList.remove('hidden');
+      btnTakeControl.classList.remove('hidden');
+      btnStop.classList.remove('hidden');
+    } else if (state === 'PAUSED') {
+      aiStatusDiv.textContent = 'Status: 🟡 AI PAUSED';
+      btnResume.classList.remove('hidden');
+      btnTakeControl.classList.remove('hidden');
+      btnStop.classList.remove('hidden');
+    } else if (state === 'HUMAN_CONTROL') {
+      aiStatusDiv.textContent = 'Status: 🔵 HUMAN CONTROL';
+      btnReturnControl.classList.remove('hidden');
+      btnStop.classList.remove('hidden');
+    } else if (state === 'STOPPED') {
+      aiStatusDiv.textContent = 'Status: 🔴 AI STOPPED';
+      btnReset.classList.remove('hidden');
+    }
+  }
 
   function setLastError(text) {
     if (!text) {
@@ -20,26 +59,30 @@ document.addEventListener('DOMContentLoaded', () => {
   function refreshUIForActiveTab() {
     chrome.runtime.sendMessage({ cmd: 'getStatus' }, (statusResponse) => {
       const isServerConnected = Boolean(statusResponse && statusResponse.status === 'connected');
+      
+      if (isServerConnected && statusResponse.controlState) {
+        controlPanel.classList.remove('hidden');
+        updateControlPanel(statusResponse.controlState);
+      } else {
+        controlPanel.classList.add('hidden');
+      }
+
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const currentTab = tabs[0];
         if (!currentTab) return;
 
         chrome.storage.local.get('connectedTabId', (data) => {
-          // Treat missing/invalid id as disconnected to avoid stale UI
           const connectedTabId = Number.isInteger(data.connectedTabId) ? data.connectedTabId : null;
           const hasConnectedTab = Boolean(connectedTabId);
 
           if (connectedTabId && connectedTabId !== currentTab.id) {
-            // Connected elsewhere: offer switch + focus, show disconnect if any tab is marked connected
             connectBtn.classList.add('hidden');
             connectTabBtn.classList.remove('hidden');
             focusTabBtn.classList.remove('hidden');
             disconnectBtn.classList.toggle('hidden', !hasConnectedTab);
-            
             statusDiv.textContent = 'Connected on another tab';
             statusDiv.className = 'status-connected';
           } else if (connectedTabId === currentTab.id) {
-            // Connected here: hide connect/switch/focus; show disconnect if any tab is marked connected
             connectBtn.classList.add('hidden');
             connectTabBtn.classList.add('hidden');
             focusTabBtn.classList.add('hidden');
@@ -49,17 +92,14 @@ document.addEventListener('DOMContentLoaded', () => {
               statusDiv.textContent = 'Connected on this tab';
               statusDiv.className = 'status-connected';
             } else {
-              // If background isn't actually connected, don't display Connecting forever
               statusDiv.textContent = 'Disconnected';
               statusDiv.className = 'status-disconnected';
             }
           } else {
-            // Not connected anywhere yet
             connectBtn.classList.remove('hidden');
             connectTabBtn.classList.add('hidden');
             focusTabBtn.classList.add('hidden');
             disconnectBtn.classList.add('hidden');
-            
             statusDiv.textContent = 'Disconnected';
             statusDiv.className = 'status-disconnected';
           }
@@ -68,16 +108,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // URL configuration removed
-
-  // Initial paint
   refreshUIForActiveTab();
 
-  // Connect to MCP Server (save current tab as connected)
   connectBtn.addEventListener('click', () => {
     statusDiv.textContent = 'Connecting...';
     statusDiv.className = 'status-disconnected';
-
     setLastError('');
     chrome.runtime.sendMessage({ cmd: 'connect' }, (response) => {
       if (chrome.runtime.lastError || !response || !response.success) {
@@ -86,28 +121,24 @@ document.addEventListener('DOMContentLoaded', () => {
         setLastError(chrome.runtime.lastError ? chrome.runtime.lastError.message : 'Failed to connect');
         return;
       }
-
-      // On successful background connection, mark this tab as the connected one
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         chrome.storage.local.set({ connectedTabId: tabs[0].id }, () => {
           statusDiv.textContent = 'Connected on this tab';
           statusDiv.className = 'status-connected';
-
           connectBtn.classList.add('hidden');
           connectTabBtn.classList.add('hidden');
           focusTabBtn.classList.add('hidden');
+          refreshUIForActiveTab();
         });
       });
     });
   });
 
-  // Switch connection to current tab
   connectTabBtn.addEventListener('click', () => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       chrome.storage.local.set({ connectedTabId: tabs[0].id }, () => {
         statusDiv.textContent = 'Switched connection to this tab';
         statusDiv.className = 'status-connected';
-
         connectBtn.classList.add('hidden');
         connectTabBtn.classList.add('hidden');
         focusTabBtn.classList.add('hidden');
@@ -116,7 +147,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Focus back to connected tab
   focusTabBtn.addEventListener('click', () => {
     chrome.storage.local.get('connectedTabId', (data) => {
       if (data.connectedTabId) {
@@ -126,10 +156,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Disconnect from MCP Server
   disconnectBtn.addEventListener('click', () => {
     chrome.runtime.sendMessage({ cmd: 'disconnect' }, (_response) => {
-      // Clear stored connection
       chrome.storage.local.remove('connectedTabId', () => {
         statusDiv.textContent = 'Disconnected';
         statusDiv.className = 'status-disconnected';
@@ -138,57 +166,44 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Element picker removed
+  function sendControlAction(action) {
+    chrome.runtime.sendMessage({ cmd: 'control_action', action }, () => {
+      refreshUIForActiveTab();
+    });
+  }
 
-  // Reflect background status updates in the popup
+  btnPause.addEventListener('click', () => sendControlAction('PAUSE'));
+  btnResume.addEventListener('click', () => sendControlAction('RESUME'));
+  btnTakeControl.addEventListener('click', () => sendControlAction('TAKE_CONTROL'));
+  btnReturnControl.addEventListener('click', () => sendControlAction('RETURN_CONTROL'));
+  btnStop.addEventListener('click', () => sendControlAction('EMERGENCY_STOP'));
+  btnReset.addEventListener('click', () => sendControlAction('RESET_STOP'));
+
   chrome.runtime.onMessage.addListener((message) => {
-    if (message?.status === 'Connected' || message?.status === 'Disconnected' || message?.status === 'WebSocket error' || message?.status === 'Failed to open WebSocket') {
-      switch (message.status) {
-        case 'Connected':
-          statusDiv.textContent = 'Connected to MCP Server';
-          statusDiv.className = 'status-connected';
-          refreshUIForActiveTab();
-          break;
-        case 'Disconnected':
-          statusDiv.textContent = 'Disconnected';
-          statusDiv.className = 'status-disconnected';
-          refreshUIForActiveTab();
-          break;
-        case 'WebSocket error':
-          statusDiv.textContent = 'WebSocket connection error';
-          statusDiv.className = 'status-disconnected';
-          setLastError('WebSocket connection error');
-          refreshUIForActiveTab();
-          break;
-        case 'Failed to open WebSocket':
-          statusDiv.textContent = 'Failed to connect to MCP server';
-          statusDiv.className = 'status-disconnected';
-          setLastError('Failed to open WebSocket');
-          refreshUIForActiveTab();
-          break;
+    if (message?.status) {
+      if (message.controlState) {
+        updateControlPanel(message.controlState);
+      }
+      
+      if (['Connected', 'Disconnected', 'WebSocket error', 'Failed to open WebSocket'].includes(message.status)) {
+        refreshUIForActiveTab();
       }
     }
   });
 
-  // When the active tab changes while popup is open, reflect correct buttons
   chrome.tabs.onActivated.addListener(() => {
     refreshUIForActiveTab();
   });
 
-  // When the active tab finishes loading, re-evaluate UI (optional but helps)
   chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
     if (tab.active && changeInfo.status === 'complete') {
       refreshUIForActiveTab();
     }
   });
 
-  // If storage value changes in background or another popup, refresh
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.connectedTabId) {
       refreshUIForActiveTab();
     }
   });
 });
-
-
-

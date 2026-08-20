@@ -108,6 +108,20 @@
       <button id="connect-tab" class="btn-dark hidden">Connect from this tab</button>
       <button id="focus-tab" class="btn-light hidden">Focus connected tab</button>
       <button id="disconnect" class="btn-danger hidden">Disconnect</button>
+      
+      <div id="control-panel" class="hidden" style="margin-top: 16px; border-top: 1px solid #eee; padding-top: 16px;">
+        <div id="ai-status" style="margin-bottom: 12px; font-weight: bold; text-align: center;">Status: ● AI ACTIVE</div>
+        
+        <button id="btn-pause" class="btn-light">PAUSE AI</button>
+        <button id="btn-resume" class="btn-light hidden">RESUME AI</button>
+        
+        <button id="btn-take-control" class="btn-light">TAKE CONTROL</button>
+        <button id="btn-return-control" class="btn-light hidden">RETURN CONTROL TO AI</button>
+        
+        <button id="btn-stop" class="btn-danger">EMERGENCY STOP</button>
+        <button id="btn-reset" class="btn-light hidden">RESET / START AGAIN</button>
+      </div>
+
       <div id="status" class="status-disconnected">Disconnected</div>
       <div id="last-error" class="version hidden"></div>
       <div class="version">v1.0.0</div>

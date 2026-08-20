@@ -10,6 +10,7 @@ import { createServerWithTools } from "@/server";
 import * as common from "@/tools/common";
 import * as custom from "@/tools/custom";
 import * as snapshot from "@/tools/snapshot";
+import * as control from "@/tools/control";
 import type { Tool } from "@/tools/tool";
 
 import packageJSON from "../package.json";
@@ -37,6 +38,12 @@ const snapshotTools: Tool[] = [
   snapshot.selectOption,
   ...commonTools,
   ...customTools,
+  control.pause_ai,
+  control.resume_ai,
+  control.take_control,
+  control.return_control,
+  control.emergency_stop,
+  control.get_control_state,
 ];
 
 const resources: Resource[] = [];
