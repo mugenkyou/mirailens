@@ -1,0 +1,70 @@
+name: Extension Build and Validate
+
+on:
+  push:
+    branches: [ main, control-hardening, github-engineering-infrastructure ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate manifest and file references
+        run: |
+          node -e "
+          const fs = require('fs');
+          const path = require('path');
+          const manifestPath = './extension/manifest.json';
+          if (!fs.existsSync(manifestPath)) {
+            console.error('manifest.json does not exist!');
+            process.exit(1);
+          }
+          let manifest;
+          try {
+            manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+          } catch (e) {
+            console.error('manifest.json is invalid JSON:', e);
+            process.exit(1);
+          }
+          const filesToCheck = [
+            manifest.action?.default_popup,
+            manifest.background?.service_worker,
+            manifest.content_scripts?.[0]?.js?.[0],
+            manifest.icons?.['16']
+          ].filter(Boolean);
+          let failed = false;
+          for (const file of filesToCheck) {
+            const filePath = path.join('./extension', file);
+            if (!fs.existsSync(filePath)) {
+              console.error('File referenced in manifest.json does not exist: ' + filePath);
+              failed = true;
+            } else {
+              console.log('Validated reference: ' + filePath);
+            }
+          }
+          if (failed) process.exit(1);
+          console.log('All extension manifest file references successfully validated!');
+          "
+
+      - name: Build extension zip artifact
+        run: |
+          cd extension
+          zip -r ../mirailens-extension.zip . -x "*.git*"
+
+      - name: Upload Extension Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mirailens-extension
+          path: mirailens-extension.zip

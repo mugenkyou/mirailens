@@ -1,0 +1,48 @@
+name: 🐛 Bug Report
+description: File a bug report to help us improve MiraiLens
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a bug! Please fill out the form below with as much detail as possible.
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Provide a clear and concise description of the bug.
+      placeholder: What is the issue?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Provide steps to reproduce the bug.
+      placeholder: |
+        1. Start the MCP server...
+        2. Connect tab via extension...
+        3. Run tool...
+    validations:
+      required: true
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: Expected Behavior
+      description: A clear and concise description of what you expected to happen.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating System, Node version, Extension version, Chrome version.
+      placeholder: e.g. Windows 11, Node v22.18.0, Chrome 124, Extension v1.1.7
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs & Screenshots
+      description: Paste any server console logs or browser console logs here, or drag and drop screenshots.
+      render: shell
