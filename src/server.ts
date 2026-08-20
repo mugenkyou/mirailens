@@ -35,9 +35,25 @@ export async function createServerWithTools(options: Options): Promise<Server> {
   wss.on("connection", (websocket) => {
     // Close any existing connections
     if (context.hasWs()) {
-      context.ws.close();
+      try {
+        context.ws.close();
+      } catch (_) {}
     }
     context.ws = websocket;
+
+    websocket.on("message", (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+        if (message.type === "heartbeat_ping") {
+          websocket.send(JSON.stringify({ id: message.id, type: "heartbeat_pong", result: "pong" }));
+        } else if (message.type === "control_state_changed") {
+          context.controlState = message.payload.state;
+          console.log(`[MCP Server] Mirrored control state updated to: ${context.controlState}`);
+        }
+      } catch (err) {
+        // Ignore malformed messages
+      }
+    });
   });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {

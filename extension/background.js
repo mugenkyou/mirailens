@@ -1,6 +1,42 @@
-// Initialize persistent control state on startup
+const STATES = {
+  IDLE: 'IDLE',
+  AGENT_RUNNING: 'AGENT_RUNNING',
+  HUMAN_TAKEOVER: 'HUMAN_TAKEOVER',
+  HUMAN_CONTROLLED: 'HUMAN_CONTROLLED',
+  AGENT_RESUMING: 'AGENT_RESUMING',
+  BLOCKED: 'BLOCKED',
+  COMPLETED: 'COMPLETED',
+  FAILED: 'FAILED'
+};
+
+const TRANSITION_MATRIX = {
+  [STATES.IDLE]: [STATES.AGENT_RUNNING, STATES.HUMAN_TAKEOVER, STATES.HUMAN_CONTROLLED, STATES.BLOCKED, STATES.COMPLETED, STATES.FAILED],
+  [STATES.AGENT_RUNNING]: [STATES.IDLE, STATES.HUMAN_TAKEOVER, STATES.HUMAN_CONTROLLED, STATES.BLOCKED, STATES.FAILED],
+  [STATES.HUMAN_TAKEOVER]: [STATES.HUMAN_CONTROLLED, STATES.BLOCKED],
+  [STATES.HUMAN_CONTROLLED]: [STATES.AGENT_RESUMING, STATES.BLOCKED],
+  [STATES.AGENT_RESUMING]: [STATES.AGENT_RUNNING, STATES.IDLE, STATES.HUMAN_TAKEOVER, STATES.BLOCKED],
+  [STATES.BLOCKED]: [STATES.AGENT_RESUMING, STATES.IDLE],
+  [STATES.COMPLETED]: [STATES.IDLE],
+  [STATES.FAILED]: [STATES.IDLE]
+};
+
 const CONTROL_STATE_KEY = 'controlState';
-let controlState = 'RUNNING'; // default, will be overridden by init
+let controlState = STATES.IDLE; // default, overridden by init
+let activeAction = null; // { id, type, reject }
+
+let isEmergencyStop = false;
+let pausedBy = null;
+let connectedTabId = null;
+
+function setEmergencyStop(value) {
+  isEmergencyStop = value;
+  chrome.storage.local.set({ isEmergencyStop: value }, () => {});
+}
+
+function setPausedBy(value) {
+  pausedBy = value;
+  chrome.storage.local.set({ pausedBy: value }, () => {});
+}
 
 function logControlTransition(prev, next, source) {
   const ts = new Date().toISOString();
@@ -8,40 +44,180 @@ function logControlTransition(prev, next, source) {
 }
 
 function persistControlState(state, source) {
-  chrome.storage.local.set({ [CONTROL_STATE_KEY]: state }, () => {
-    // optional callback
-  });
+  chrome.storage.local.set({ [CONTROL_STATE_KEY]: state }, () => {});
   logControlTransition(controlState, state, source);
   controlState = state;
 }
 
 function initControlState() {
-  chrome.storage.local.get([CONTROL_STATE_KEY], (data) => {
+  chrome.storage.local.get([CONTROL_STATE_KEY, 'isEmergencyStop', 'pausedBy', 'connectedTabId'], (data) => {
+    isEmergencyStop = !!data.isEmergencyStop;
+    pausedBy = data.pausedBy || null;
+    connectedTabId = data.connectedTabId || null;
     const stored = data[CONTROL_STATE_KEY];
-    if (!stored) {
-      // No persisted state, start safe STOPPED
-      persistControlState('STOPPED', 'init_no_state');
-    } else if (stored === 'RUNNING') {
-      // Safer default: do not auto‑resume autonomous AI after restart
-      persistControlState('STOPPED', 'init_running_to_stopped');
+    
+    if (isEmergencyStop) {
+      persistControlState(STATES.BLOCKED, 'init_emergency_stop');
+    } else if (pausedBy) {
+      persistControlState(STATES.BLOCKED, 'init_paused');
+    } else if (!stored) {
+      persistControlState(STATES.IDLE, 'init_no_state');
+    } else if (stored === 'RUNNING' || stored === STATES.AGENT_RUNNING || stored === STATES.IDLE) {
+      persistControlState(STATES.IDLE, 'init_to_idle');
+    } else if (stored === 'STOPPED' || stored === 'PAUSED' || stored === STATES.BLOCKED) {
+      persistControlState(STATES.BLOCKED, 'init_to_blocked');
+    } else if (stored === 'HUMAN_CONTROL' || stored === STATES.HUMAN_CONTROLLED) {
+      persistControlState(STATES.HUMAN_CONTROLLED, 'init_to_human_controlled');
     } else {
-      // Restore PAUSED, HUMAN_CONTROL, STOPPED as stored
       persistControlState(stored, 'init_restore');
     }
-    // Notify any UI listeners of the restored state
     sendPopupStatus('Connected');
   });
 }
 
-// Call init on load
 initControlState();
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local') {
+    if (changes.connectedTabId) {
+      connectedTabId = changes.connectedTabId.newValue || null;
+    }
+    if (changes.isEmergencyStop) {
+      isEmergencyStop = !!changes.isEmergencyStop.newValue;
+    }
+    if (changes.pausedBy) {
+      pausedBy = changes.pausedBy.newValue || null;
+    }
+  }
+});
+
+function transitionTo(nextState, source) {
+  const prevState = controlState;
+  const allowedNext = TRANSITION_MATRIX[prevState];
+  if (!allowedNext || !allowedNext.includes(nextState)) {
+    console.error(`Invalid state transition: ${prevState} → ${nextState} (requested by ${source})`);
+    return { success: false, reason: `Invalid transition from ${prevState} to ${nextState}` };
+  }
+  
+  persistControlState(nextState, source);
+  
+  if (nextState === STATES.HUMAN_TAKEOVER || nextState === STATES.HUMAN_CONTROLLED || nextState === STATES.BLOCKED) {
+    abortActiveAction(`Execution halted: transitioned to ${nextState}`);
+  }
+  
+  sendPopupStatus('Connected');
+  notifyServerStateChange(nextState);
+  return { success: true };
+}
+
+function abortActiveAction(reason) {
+  if (activeAction) {
+    console.log(`Aborting active action ${activeAction.type} (${activeAction.id}) due to: ${reason}`);
+    try {
+      activeAction.reject(new Error(reason));
+    } catch (e) {
+      console.error('Error rejecting active action:', e);
+    }
+    activeAction = null;
+  }
+  for (const [tabId, pending] of pendingPreviews.entries()) {
+    clearTimeout(pending.timeoutId);
+    pending.reject(new Error(reason));
+    exec(tabId, () => {
+      const ui = document.getElementById('mirailens-preview-overlay');
+      if (ui) ui.remove();
+    }).catch(() => {});
+  }
+  pendingPreviews.clear();
+}
+
+function handleControlAction(action, source = 'ai') {
+  if (action === 'EMERGENCY_STOP') {
+    setEmergencyStop(true);
+    if (controlState === STATES.BLOCKED) {
+      return { success: true };
+    }
+    return transitionTo(STATES.BLOCKED, source);
+  }
+
+  if (action === 'PAUSE') {
+    setPausedBy(source);
+    if (controlState === STATES.BLOCKED) {
+      return { success: true };
+    }
+    return transitionTo(STATES.BLOCKED, source);
+  }
+
+  if (action === 'TAKE_CONTROL') {
+    if (controlState === STATES.HUMAN_CONTROLLED) {
+      return { success: true };
+    }
+    const res = transitionTo(STATES.HUMAN_TAKEOVER, source);
+    if (res.success) {
+      return transitionTo(STATES.HUMAN_CONTROLLED, source);
+    }
+    return res;
+  }
+
+  if (action === 'RETURN_CONTROL') {
+    if (source !== 'human' && source !== 'human_implicit') {
+      return { success: false, reason: "Return control must be authorized by human." };
+    }
+    if (controlState === STATES.IDLE || controlState === STATES.AGENT_RUNNING) {
+      return { success: true };
+    }
+    const res = transitionTo(STATES.AGENT_RESUMING, source);
+    if (res.success) {
+      return transitionTo(STATES.IDLE, source);
+    }
+    return res;
+  }
+
+  if (action === 'RESUME') {
+    if (controlState === STATES.HUMAN_CONTROLLED || controlState === STATES.HUMAN_TAKEOVER) {
+      if (source !== 'human' && source !== 'human_implicit') {
+        return { success: false, reason: "Cannot resume: human holds control of the browser." };
+      }
+    }
+    if (isEmergencyStop) {
+      return { success: false, reason: "Cannot resume: Emergency Stop is active. Requires human reset." };
+    }
+    if (pausedBy === 'human' && source !== 'human' && source !== 'human_implicit') {
+      return { success: false, reason: "Cannot resume: paused by human." };
+    }
+    
+    if (controlState === STATES.IDLE || controlState === STATES.AGENT_RUNNING) {
+      return { success: true };
+    }
+    const res = transitionTo(STATES.AGENT_RESUMING, source);
+    if (res.success) {
+      setPausedBy(null);
+      return transitionTo(STATES.IDLE, source);
+    }
+    return res;
+  }
+
+  if (action === 'RESET_STOP') {
+    if (source !== 'human' && source !== 'human_implicit') {
+      return { success: false, reason: "Reset emergency stop must be authorized by human." };
+    }
+    if (controlState !== STATES.BLOCKED) {
+      return { success: false, reason: `Cannot reset from state ${controlState}.` };
+    }
+    setEmergencyStop(false);
+    setPausedBy(null);
+    return transitionTo(STATES.IDLE, source);
+  }
+
+  return { success: false, reason: `Unknown control action: ${action}` };
+}
+
 let activeTabId = null;
 let reconnectAttempt = 0;
 let lastErrorMessage = '';
 let serverUrl = 'ws://127.0.0.1:29100';
 let ws = null;
 const pendingPreviews = new Map();
-// controlState is managed via persistence; default set in initControlState
 
 // ---------- Chrome API helpers (callback-based, safe in MV3) ----------
 function tabsQuery(queryInfo) {
@@ -68,6 +244,15 @@ function sendPopupStatus(status) {
       void chrome.runtime.lastError;
     });
   } catch (_err) {}
+}
+
+function notifyServerStateChange(state) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'control_state_changed',
+      payload: { state }
+    }));
+  }
 }
 
 async function getActiveTabId() {
@@ -98,11 +283,25 @@ async function exec(tabId, func, args = []) {
 }
 
 function canExecuteAIAction() {
-  if (controlState === 'RUNNING') return { allowed: true };
-  if (controlState === 'PAUSED') return { allowed: false, reason: "AI execution is currently paused", controlState: "PAUSED" };
-  if (controlState === 'HUMAN_CONTROL') return { allowed: false, reason: "Browser is currently under human control", controlState: "HUMAN_CONTROL" };
-  if (controlState === 'STOPPED') return { allowed: false, reason: "AI execution has been emergency stopped", controlState: "STOPPED" };
-  return { allowed: false, reason: "Unknown control state", controlState };
+  if (activeAction !== null) {
+    return {
+      allowed: false,
+      reason: "Another AI action is currently in progress.",
+      controlState
+    };
+  }
+  if (controlState === STATES.IDLE || controlState === STATES.AGENT_RESUMING || controlState === STATES.AGENT_RUNNING) {
+    return { allowed: true };
+  }
+  return {
+    allowed: false,
+    reason: `AI execution is blocked. Current state: ${controlState}`,
+    controlState
+  };
+}
+
+async function handleGetConsoleLogs() {
+  return []; // Fallback for console logs
 }
 
 async function handleMCPMessage(message) {
@@ -111,27 +310,22 @@ async function handleMCPMessage(message) {
     console.log('Received MCP message:', type, payload);
     
     if (type === 'browser_control') {
-      const { action, source = 'ai' } = payload;
-      if (action === 'RESET_STOP' && source !== 'human') {
-        sendError(id, type, { allowed: false, reason: 'RESET_STOP not permitted from AI', controlState });
-        return;
+      const { action } = payload;
+      const res = handleControlAction(action, 'ai');
+      if (res.success) {
+        sendResponse(id, type, { state: controlState });
+      } else {
+        sendError(id, type, { allowed: false, reason: res.reason, controlState });
       }
-      const prevState = controlState;
-      if (action === 'PAUSE' && controlState !== 'STOPPED') persistControlState('PAUSED', source);
-      else if (action === 'RESUME' && controlState !== 'STOPPED') persistControlState('RUNNING', source);
-      else if (action === 'TAKE_CONTROL' && controlState !== 'STOPPED') persistControlState('HUMAN_CONTROL', source);
-      else if (action === 'RETURN_CONTROL' && controlState !== 'STOPPED') persistControlState('RUNNING', source);
-      else if (action === 'EMERGENCY_STOP') persistControlState('STOPPED', source);
-      else if (action === 'RESET_STOP') persistControlState('RUNNING', source);
-      
-      // If state changed, log already done in persistControlState
-      sendPopupStatus('Connected');
-      sendResponse(id, type, { state: controlState });
       return;
     }
     
-    if (type === 'get_control_state') {
-      sendResponse(id, type, { state: controlState });
+    if (type === 'get_control_state' || type === 'get_agent_status') {
+      sendResponse(id, type, {
+        state: controlState,
+        connectionStatus: ws && ws.readyState === WebSocket.OPEN ? 'connected' : 'disconnected',
+        allowedToExecute: canExecuteAIAction().allowed
+      });
       return;
     }
 
@@ -146,9 +340,9 @@ async function handleMCPMessage(message) {
       browser_hover: handleHover,
       browser_snapshot: handleSnapshot,
       browser_screenshot: handleScreenshot,
+      browser_get_console_logs: handleGetConsoleLogs,
       getUrl: handleGetUrl,
       getTitle: handleGetTitle,
-      // future actions can be added here
     };
 
     const handler = browserHandlers[type];
@@ -164,12 +358,47 @@ async function handleMCPMessage(message) {
       return;
     }
 
+    // Transition to AGENT_RUNNING if we are IDLE or AGENT_RESUMING
+    if (controlState === STATES.IDLE || controlState === STATES.AGENT_RESUMING) {
+      const transitioned = transitionTo(STATES.AGENT_RUNNING, 'start_action');
+      if (!transitioned.success) {
+        sendError(id, type, { allowed: false, reason: transitioned.reason, controlState });
+        return;
+      }
+    }
+
+    let actionRejected = false;
+    const actionPromise = new Promise(async (resolve, reject) => {
+      activeAction = {
+        id,
+        type,
+        reject: (err) => {
+          actionRejected = true;
+          reject(err);
+        }
+      };
+
+      try {
+        const result = await handler(payload);
+        resolve(result);
+      } catch (e) {
+        reject(e);
+      }
+    });
+
     try {
-      const result = await handler(payload);
+      const result = await actionPromise;
+      activeAction = null;
+      if (controlState === STATES.AGENT_RUNNING) {
+        transitionTo(STATES.IDLE, 'finish_action');
+      }
       sendResponse(id, type, result);
     } catch (e) {
-      console.error('Error handling action', type, e);
-      sendError(id, type, String(e?.message || e));
+      activeAction = null;
+      sendError(id, type, { allowed: false, reason: e.message || String(e), controlState });
+      if (!actionRejected && controlState === STATES.AGENT_RUNNING) {
+        transitionTo(STATES.IDLE, 'action_failed');
+      }
     }
     return;
   } catch (error) {
@@ -509,29 +738,82 @@ async function retry(fn, times = 3, delayMs = 300) {
   return null;
 }
 
+let heartbeatIntervalId = null;
+let heartbeatTimeoutId = null;
+
+function startHeartbeat() {
+  stopHeartbeat();
+  heartbeatIntervalId = setInterval(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'heartbeat_ping' }));
+      heartbeatTimeoutId = setTimeout(() => {
+        console.warn('Heartbeat timeout. Closing stale connection...');
+        if (ws) {
+          ws.close();
+        }
+      }, 5000);
+    }
+  }, 10000);
+}
+
+function stopHeartbeat() {
+  if (heartbeatIntervalId) {
+    clearInterval(heartbeatIntervalId);
+    heartbeatIntervalId = null;
+  }
+  if (heartbeatTimeoutId) {
+    clearTimeout(heartbeatTimeoutId);
+    heartbeatTimeoutId = null;
+  }
+}
+
+function handleHeartbeatPong() {
+  if (heartbeatTimeoutId) {
+    clearTimeout(heartbeatTimeoutId);
+    heartbeatTimeoutId = null;
+  }
+}
+
+let reconnectTimeoutId = null;
+
 function connect() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
     return true;
   }
   
   try {
+    if (reconnectTimeoutId) {
+      clearTimeout(reconnectTimeoutId);
+      reconnectTimeoutId = null;
+    }
     ws = new WebSocket(serverUrl);
     
     ws.onopen = () => {
       console.log('WebSocket connected to MCP server');
       sendPopupStatus('Connected');
       reconnectAttempt = 0;
+      startHeartbeat();
       ws.send(JSON.stringify({ 
         type: 'extension_connected',
         data: { version: '1.0.0', capabilities: ['navigate', 'click', 'type', 'hover', 'snapshot'] }
       }));
+      notifyServerStateChange(controlState);
     };
     
     ws.onclose = () => {
       console.log('WebSocket disconnected from MCP server');
       sendPopupStatus('Disconnected');
+      stopHeartbeat();
       const attempt = ++reconnectAttempt;
       ws = null;
+      
+      abortActiveAction("WebSocket disconnected.");
+      
+      if (controlState === STATES.AGENT_RUNNING || controlState === STATES.AGENT_RESUMING) {
+        transitionTo(STATES.IDLE, 'disconnect');
+      } else if (controlState === STATES.HUMAN_TAKEOVER) {
+        transitionTo(STATES.HUMAN_CONTROLLED, 'disconnect');
+      }
       
       for (const [tabId, pending] of pendingPreviews.entries()) {
         clearTimeout(pending.timeoutId);
@@ -544,7 +826,7 @@ function connect() {
       pendingPreviews.clear();
       
       const delay = Math.min(30000, 1000 * Math.pow(2, attempt));
-      setTimeout(() => {
+      reconnectTimeoutId = setTimeout(() => {
         if (!ws) connect();
       }, delay);
     };
@@ -558,6 +840,10 @@ function connect() {
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
+        if (message.type === 'heartbeat_pong' || message.result === 'pong') {
+          handleHeartbeatPong();
+          return;
+        }
         handleMCPMessage(message);
       } catch (error) {
         console.error('Error parsing message:', error);
@@ -581,6 +867,10 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   if (activeTabId === tabId) {
     activeTabId = null;
   }
+  if (connectedTabId === tabId) {
+    connectedTabId = null;
+    chrome.storage.local.remove('connectedTabId');
+  }
   if (pendingPreviews.has(tabId)) {
     clearTimeout(pendingPreviews.get(tabId).timeoutId);
     pendingPreviews.get(tabId).reject(new Error("Tab closed."));
@@ -597,6 +887,17 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 });
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg?.type === 'user_interaction') {
+    if (_sender.tab && _sender.tab.id === connectedTabId) {
+      if (controlState === STATES.AGENT_RUNNING || controlState === STATES.AGENT_RESUMING) {
+        console.log(`Implicit takeover detected via ${msg.eventType} on connected tab.`);
+        handleControlAction('TAKE_CONTROL', 'human_implicit');
+      }
+    }
+    sendResponse({ success: true });
+    return false;
+  }
+
   if (msg?.cmd === 'connect') {
     reconnectAttempt = 0;
     const ok = connect();
@@ -615,19 +916,23 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       ws.close();
       ws = null;
     }
+    if (reconnectTimeoutId) {
+      clearTimeout(reconnectTimeoutId);
+      reconnectTimeoutId = null;
+    }
     sendResponse({ success: true });
     return false;
   }
   
   if (msg?.cmd === 'control_action') {
     // Messages from popup are human-initiated
-    handleMCPMessage({ type: 'browser_control', payload: { action: msg.action, source: 'human' } });
+    handleControlAction(msg.action, 'human');
     sendResponse({ success: true });
     return false;
   }
 });
 
-chrome.commands?.onCommand.addListener((command) => {
+chrome.commands?.onCommand?.addListener((command) => {
   if (command === 'connect') {
     connect();
   } else if (command === 'disconnect') {
@@ -658,7 +963,7 @@ chrome.runtime.onStartup?.addListener(() => {
   sendPopupStatus('Disconnected');
 });
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled?.addListener(() => {
   try { chrome.storage.local.remove('connectedTabId'); } catch (_) {}
   if (ws) {
     try { ws.close(); } catch (_) {}

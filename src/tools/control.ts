@@ -13,6 +13,85 @@ async function sendControlCommand(context: Context, action: string) {
   return await context.sendSocketMessage("browser_control", { action });
 }
 
+// --- New Phase 2 Tools ---
+
+export const get_agent_status: Tool = {
+  schema: baseControlSchema("get_agent_status", "Return the current extension-authoritative control state, connection status, and whether the agent is allowed to execute."),
+  handle: async (context) => {
+    if (!context.hasWs()) {
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            state: "BLOCKED",
+            connectionStatus: "disconnected",
+            allowedToExecute: false
+          }, null, 2)
+        }]
+      };
+    }
+
+    try {
+      const response = await context.sendSocketMessage("get_agent_status", {}, { timeoutMs: 5000 });
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            state: response.state,
+            connectionStatus: response.connectionStatus,
+            allowedToExecute: response.allowedToExecute
+          }, null, 2)
+        }]
+      };
+    } catch (e) {
+      const allowed = context.controlState === "IDLE" || context.controlState === "AGENT_RUNNING" || context.controlState === "AGENT_RESUMING";
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            state: context.controlState,
+            connectionStatus: "connected",
+            allowedToExecute: allowed,
+            warning: "Fallback to mirrored state: " + String(e.message || e)
+          }, null, 2)
+        }]
+      };
+    }
+  }
+};
+
+export const pause_agent: Tool = {
+  schema: baseControlSchema("pause_agent", "Request that the extension pause agent execution."),
+  handle: async (context) => {
+    const response = await sendControlCommand(context, "PAUSE");
+    return {
+      content: [{ type: "text", text: `AI execution pause requested. Control state is now ${response.state}.` }],
+    };
+  }
+};
+
+export const resume_agent: Tool = {
+  schema: baseControlSchema("resume_agent", "Request return of control to the agent."),
+  handle: async (context) => {
+    const response = await sendControlCommand(context, "RESUME");
+    return {
+      content: [{ type: "text", text: `AI execution resume requested. Control state is now ${response.state}.` }],
+    };
+  }
+};
+
+export const stop_agent: Tool = {
+  schema: baseControlSchema("stop_agent", "Emergency-stop all active agent execution."),
+  handle: async (context) => {
+    const response = await sendControlCommand(context, "EMERGENCY_STOP");
+    return {
+      content: [{ type: "text", text: `Emergency stop requested. Control state is now ${response.state}.` }],
+    };
+  }
+};
+
+// --- Backwards Compatibility Tools ---
+
 export const pause_ai: Tool = {
   schema: baseControlSchema("pause_ai", "Pause AI browser execution. AI tools will be blocked until resumed."),
   handle: async (context) => {

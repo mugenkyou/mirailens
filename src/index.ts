@@ -44,6 +44,10 @@ const snapshotTools: Tool[] = [
   control.return_control,
   control.emergency_stop,
   control.get_control_state,
+  control.get_agent_status,
+  control.pause_agent,
+  control.resume_agent,
+  control.stop_agent,
 ];
 
 const resources: Resource[] = [];
