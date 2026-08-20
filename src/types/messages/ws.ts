@@ -12,6 +12,10 @@ export interface SocketMessageMap {
   browser_wait: { time: number };
   browser_get_console_logs: {};
   browser_screenshot: {};
+  getUrl: {};
+  getTitle: {};
+  browser_control: { action: string };
+  get_control_state: {};
 }
 
 export type MessageType<T> = keyof T;
