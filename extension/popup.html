@@ -3,132 +3,90 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MiraiLens Connector</title>
+    <title>MiraiLens Console</title>
     <link rel="stylesheet" href="style.css" />
-    <style>
-      body { 
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
-        padding: 16px; 
-        min-width: 280px; 
-        margin: 0;
-        background: #f8f9fa;
-      }
-      .container {
-        background: white;
-        border-radius: 8px;
-        padding: 16px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-      }
-      h1.title { 
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin: 0 0 16px 0; 
-        font-size: 18px; 
-        color: #1a1a1a;
-        font-weight: 600;
-      }
-      button { 
-        width: 100%;
-        padding: 12px 16px; 
-        border: none;
-        border-radius: 6px;
-        font-size: 14px;
-        font-weight: 500;
-        cursor: pointer;
-        margin-bottom: 8px;
-        transition: background-color 0.2s, border-color 0.2s, color 0.2s;
-      }
-      .btn-light {
-        background: #fff;
-        color: #1a1a1a;
-        border: 1px solid #dcdcdc;
-      }
-      .btn-light:hover {
-        background: #f1f3f5;
-      }
-      .btn-dark {
-        background: #1a1a1a;
-        color: #fff;
-      }
-      .btn-dark:hover {
-        background: #000;
-      }
-      .btn-danger {
-        background: #dc3545;
-        color: #fff;
-      }
-      .btn-danger:hover {
-        background: #b02a37;
-      }
-      button:hover {
-        background: #0056b3;
-      }
-      button:disabled {
-        background: #6c757d;
-        cursor: not-allowed;
-      }
-      #status { 
-        margin-top: 12px; 
-        font-size: 13px; 
-        color: #6c757d;
-        text-align: center;
-        padding: 8px;
-        border-radius: 4px;
-        background: #f8f9fa;
-      }
-      .status-connected {
-        color: #28a745;
-        background: #d4edda;
-      }
-      .status-disconnected {
-        color: #dc3545;
-        background: #f8d7da;
-      }
-      .version {
-        font-size: 11px;
-        color: #adb5bd;
-        text-align: center;
-        margin-top: 12px;
-      }
-      .hidden {
-        display: none;
-      }
-    </style>
   </head>
   <body>
-    <div class="container">
-      <h1 class="title">
-        <img src="icons/Fav Icon.png" alt="MiraiLens Icon" class="title-icon">
-        MiraiLens Connector
-      </h1>
-      <!-- Buttons -->
-      <button id="connect" class="btn-dark">Connect to MCP Server</button>
-      
-      <button id="connect-tab" class="btn-dark hidden">Connect from this tab</button>
-      <button id="focus-tab" class="btn-light hidden">Focus connected tab</button>
-      <button id="disconnect" class="btn-danger hidden">Disconnect</button>
-      
-      <div id="control-panel" class="hidden" style="margin-top: 16px; border-top: 1px solid #eee; padding-top: 16px;">
-        <div id="ai-status" style="margin-bottom: 12px; font-weight: bold; text-align: center;">Status: ● AI ACTIVE</div>
-        
-        <button id="btn-pause" class="btn-light">PAUSE AI</button>
-        <button id="btn-resume" class="btn-light hidden">RESUME AI</button>
-        
-        <button id="btn-take-control" class="btn-light">TAKE CONTROL</button>
-        <button id="btn-return-control" class="btn-light hidden">RETURN CONTROL TO AI</button>
-        
-        <button id="btn-stop" class="btn-danger">EMERGENCY STOP</button>
-        <button id="btn-reset" class="btn-light hidden">RESET / START AGAIN</button>
+    <div class="console-panel">
+      <!-- Header -->
+      <div class="console-header">
+        <div class="brand">
+          <img src="icons/Fav Icon.png" alt="Icon" class="brand-icon" />
+          <span class="brand-name">MiraiLens</span>
+        </div>
+        <div id="status-badge" class="connection-status">
+          <span class="status-dot"></span>
+          <span id="status-text" class="mono">DISCONNECTED</span>
+        </div>
       </div>
 
-      <div id="status" class="status-disconnected">Disconnected</div>
-      <div id="last-error" class="version hidden"></div>
-      <div class="version">v1.0.0</div>
+      <!-- Control Panel -->
+      <div id="control-panel" class="hidden">
+        <div class="divider"></div>
+
+        <div class="section-title">CONTROL</div>
+        <div class="control-state-box">
+          <div id="ai-status-badge" class="status-indicator">
+            <span class="status-indicator-dot"></span>
+            <span id="ai-status-text" class="mono">-</span>
+          </div>
+          <div id="control-state-desc" class="desc-text">AI is idle.</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section-title">CURRENT TAB</div>
+        <div class="tab-box">
+          <div id="controlled-url" class="mono truncate">No active tab</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section-title">SESSION TELEMETRY</div>
+        <div class="telemetry-table">
+          <div class="telemetry-row">
+            <span class="telemetry-label">CONNECTED TAB</span>
+            <span id="telemetry-tab-id" class="telemetry-value mono">-</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">SERVER URL</span>
+            <span id="telemetry-server-url" class="telemetry-value mono">-</span>
+          </div>
+          <div class="telemetry-row">
+            <span class="telemetry-label">ENGINE PROTOCOL</span>
+            <span class="telemetry-value mono">WS / JSON-RPC</span>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- Action Grid -->
+        <div class="control-actions">
+          <button id="btn-take-control" class="btn btn-secondary">TAKE CONTROL</button>
+          <button id="btn-return-control" class="btn btn-primary hidden">RETURN TO AI</button>
+          
+          <button id="btn-pause" class="btn btn-secondary">PAUSE AI</button>
+          <button id="btn-resume" class="btn btn-secondary hidden">RESUME AI</button>
+        </div>
+
+        <button id="btn-stop" class="btn btn-danger">EMERGENCY STOP</button>
+        <button id="btn-reset" class="btn btn-secondary hidden">RESET EMERGENCY STOP</button>
+      </div>
+
+      <!-- Connection Actions (when offline) -->
+      <div id="connection-prompt" class="connection-actions">
+        <button id="connect" class="btn btn-primary">CONNECT TO MCP SERVER</button>
+      </div>
+
+      <div class="connection-actions">
+        <button id="connect-tab" class="btn btn-secondary hidden">CONNECT FROM THIS TAB</button>
+        <button id="focus-tab" class="btn btn-secondary hidden">FOCUS CONNECTED TAB</button>
+        <button id="disconnect" class="btn btn-secondary hidden">DISCONNECT</button>
+      </div>
+
+      <div id="last-error" class="error-box hidden"></div>
+      <div class="footer mono">v1.1.7</div>
     </div>
     <script src="popup.js"></script>
   </body>
 </html>
-
-
-

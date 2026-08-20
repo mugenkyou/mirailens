@@ -9,6 +9,7 @@ const noConnectionMessage = `No connection to browser extension. In order to pro
 
 export class Context {
   private _ws: WebSocket | undefined;
+  private _controlState: string = "IDLE";
 
   get ws(): WebSocket {
     if (!this._ws) {
@@ -19,6 +20,14 @@ export class Context {
 
   set ws(ws: WebSocket) {
     this._ws = ws;
+  }
+
+  get controlState(): string {
+    return this._controlState;
+  }
+
+  set controlState(state: string) {
+    this._controlState = state;
   }
 
   hasWs(): boolean {

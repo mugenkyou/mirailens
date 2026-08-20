@@ -3,12 +3,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const connectTabBtn = document.getElementById('connect-tab');
   const focusTabBtn = document.getElementById('focus-tab');
   const disconnectBtn = document.getElementById('disconnect');
-  const statusDiv = document.getElementById('status');
+  const statusBadge = document.getElementById('status-badge');
+  const statusText = document.getElementById('status-text');
   const lastErrorDiv = document.getElementById('last-error');
   
   // Control Panel Elements
   const controlPanel = document.getElementById('control-panel');
-  const aiStatusDiv = document.getElementById('ai-status');
+  const aiStatusBadge = document.getElementById('ai-status-badge');
+  const aiStatusText = document.getElementById('ai-status-text');
+  const controlStateDesc = document.getElementById('control-state-desc');
   const btnPause = document.getElementById('btn-pause');
   const btnResume = document.getElementById('btn-resume');
   const btnTakeControl = document.getElementById('btn-take-control');
@@ -19,6 +22,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function updateControlPanel(state) {
     if (!state) return;
     
+    // Reset buttons visibility
     btnPause.classList.add('hidden');
     btnResume.classList.add('hidden');
     btnTakeControl.classList.add('hidden');
@@ -26,22 +30,54 @@ document.addEventListener('DOMContentLoaded', () => {
     btnStop.classList.add('hidden');
     btnReset.classList.add('hidden');
 
-    if (state === 'RUNNING') {
-      aiStatusDiv.textContent = 'Status: 🟢 AI ACTIVE';
+    // Reset status badge classes
+    aiStatusBadge.className = 'status-indicator';
+
+    if (state === 'IDLE') {
+      aiStatusText.textContent = 'CONNECTED';
+      aiStatusBadge.classList.add('badge-idle');
+      controlStateDesc.textContent = 'AI is idle, waiting for commands.';
       btnPause.classList.remove('hidden');
       btnTakeControl.classList.remove('hidden');
       btnStop.classList.remove('hidden');
-    } else if (state === 'PAUSED') {
-      aiStatusDiv.textContent = 'Status: 🟡 AI PAUSED';
-      btnResume.classList.remove('hidden');
+    } else if (state === 'AGENT_RUNNING') {
+      aiStatusText.textContent = 'AI WORKING';
+      aiStatusBadge.classList.add('badge-working');
+      controlStateDesc.textContent = 'AI controls this tab.';
+      btnPause.classList.remove('hidden');
       btnTakeControl.classList.remove('hidden');
       btnStop.classList.remove('hidden');
-    } else if (state === 'HUMAN_CONTROL') {
-      aiStatusDiv.textContent = 'Status: 🔵 HUMAN CONTROL';
+    } else if (state === 'HUMAN_TAKEOVER') {
+      aiStatusText.textContent = 'WAITING FOR YOU';
+      aiStatusBadge.classList.add('badge-waiting');
+      controlStateDesc.textContent = 'Human takeover requested.';
+      btnStop.classList.remove('hidden');
+    } else if (state === 'HUMAN_CONTROLLED') {
+      aiStatusText.textContent = 'HUMAN CONTROL';
+      aiStatusBadge.classList.add('badge-controlling');
+      controlStateDesc.textContent = 'Human control active.';
       btnReturnControl.classList.remove('hidden');
       btnStop.classList.remove('hidden');
-    } else if (state === 'STOPPED') {
-      aiStatusDiv.textContent = 'Status: 🔴 AI STOPPED';
+    } else if (state === 'AGENT_RESUMING') {
+      aiStatusText.textContent = 'AI RESUMING';
+      aiStatusBadge.classList.add('badge-working');
+      controlStateDesc.textContent = 'AI is resuming control.';
+      btnStop.classList.remove('hidden');
+    } else if (state === 'BLOCKED') {
+      aiStatusText.textContent = 'BLOCKED';
+      aiStatusBadge.classList.add('badge-blocked');
+      controlStateDesc.textContent = 'AI execution is blocked.';
+      btnResume.classList.remove('hidden');
+      btnReset.classList.remove('hidden');
+    } else if (state === 'COMPLETED') {
+      aiStatusText.textContent = 'COMPLETED';
+      aiStatusBadge.classList.add('badge-completed');
+      controlStateDesc.textContent = 'AI execution completed successfully.';
+      btnReset.classList.remove('hidden');
+    } else if (state === 'FAILED') {
+      aiStatusText.textContent = 'FAILED';
+      aiStatusBadge.classList.add('badge-failed');
+      controlStateDesc.textContent = 'AI execution failed.';
       btnReset.classList.remove('hidden');
     }
   }
@@ -60,6 +96,15 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.runtime.sendMessage({ cmd: 'getStatus' }, (statusResponse) => {
       const isServerConnected = Boolean(statusResponse && statusResponse.status === 'connected');
       
+      // Update top-level connection badge
+      if (isServerConnected) {
+        statusBadge.className = 'connection-status badge-connected';
+        statusText.textContent = 'CONNECTED';
+      } else {
+        statusBadge.className = 'connection-status badge-disconnected';
+        statusText.textContent = 'DISCONNECTED';
+      }
+
       if (isServerConnected && statusResponse.controlState) {
         controlPanel.classList.remove('hidden');
         updateControlPanel(statusResponse.controlState);
@@ -67,21 +112,44 @@ document.addEventListener('DOMContentLoaded', () => {
         controlPanel.classList.add('hidden');
       }
 
+      // Update telemetry server URL
+      const serverUrlElement = document.getElementById('telemetry-server-url');
+      if (serverUrlElement) {
+        serverUrlElement.textContent = (statusResponse && statusResponse.url) ? statusResponse.url : 'ws://127.0.0.1:29100';
+      }
+
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         const currentTab = tabs[0];
         if (!currentTab) return;
 
+        // Update controlled domain text
+        const urlElement = document.getElementById('controlled-url');
+        if (urlElement) {
+          try {
+            const urlObj = new URL(currentTab.url);
+            urlElement.textContent = urlObj.hostname + urlObj.pathname;
+          } catch (_) {
+            urlElement.textContent = currentTab.url || 'No active tab';
+          }
+        }
+
         chrome.storage.local.get('connectedTabId', (data) => {
           const connectedTabId = Number.isInteger(data.connectedTabId) ? data.connectedTabId : null;
           const hasConnectedTab = Boolean(connectedTabId);
+
+          // Update telemetry Tab ID
+          const tabIdElement = document.getElementById('telemetry-tab-id');
+          if (tabIdElement) {
+            tabIdElement.textContent = connectedTabId ? `TAB ${connectedTabId}` : 'NONE';
+          }
 
           if (connectedTabId && connectedTabId !== currentTab.id) {
             connectBtn.classList.add('hidden');
             connectTabBtn.classList.remove('hidden');
             focusTabBtn.classList.remove('hidden');
             disconnectBtn.classList.toggle('hidden', !hasConnectedTab);
-            statusDiv.textContent = 'Connected on another tab';
-            statusDiv.className = 'status-connected';
+            statusText.textContent = 'ACTIVE ON ANOTHER TAB';
+            statusBadge.className = 'connection-status badge-connected';
           } else if (connectedTabId === currentTab.id) {
             connectBtn.classList.add('hidden');
             connectTabBtn.classList.add('hidden');
@@ -89,19 +157,19 @@ document.addEventListener('DOMContentLoaded', () => {
             disconnectBtn.classList.toggle('hidden', !hasConnectedTab);
             
             if (isServerConnected) {
-              statusDiv.textContent = 'Connected on this tab';
-              statusDiv.className = 'status-connected';
+              statusText.textContent = 'ACTIVE ON THIS TAB';
+              statusBadge.className = 'connection-status badge-connected';
             } else {
-              statusDiv.textContent = 'Disconnected';
-              statusDiv.className = 'status-disconnected';
+              statusText.textContent = 'DISCONNECTED';
+              statusBadge.className = 'connection-status badge-disconnected';
             }
           } else {
             connectBtn.classList.remove('hidden');
             connectTabBtn.classList.add('hidden');
             focusTabBtn.classList.add('hidden');
             disconnectBtn.classList.add('hidden');
-            statusDiv.textContent = 'Disconnected';
-            statusDiv.className = 'status-disconnected';
+            statusText.textContent = 'DISCONNECTED';
+            statusBadge.className = 'connection-status badge-disconnected';
           }
         });
       });
@@ -111,20 +179,20 @@ document.addEventListener('DOMContentLoaded', () => {
   refreshUIForActiveTab();
 
   connectBtn.addEventListener('click', () => {
-    statusDiv.textContent = 'Connecting...';
-    statusDiv.className = 'status-disconnected';
+    statusText.textContent = 'CONNECTING...';
+    statusBadge.className = 'connection-status badge-disconnected';
     setLastError('');
     chrome.runtime.sendMessage({ cmd: 'connect' }, (response) => {
       if (chrome.runtime.lastError || !response || !response.success) {
-        statusDiv.textContent = 'Connection failed';
-        statusDiv.className = 'status-disconnected';
+        statusText.textContent = 'CONNECTION FAILED';
+        statusBadge.className = 'connection-status badge-disconnected';
         setLastError(chrome.runtime.lastError ? chrome.runtime.lastError.message : 'Failed to connect');
         return;
       }
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         chrome.storage.local.set({ connectedTabId: tabs[0].id }, () => {
-          statusDiv.textContent = 'Connected on this tab';
-          statusDiv.className = 'status-connected';
+          statusText.textContent = 'ACTIVE ON THIS TAB';
+          statusBadge.className = 'connection-status badge-connected';
           connectBtn.classList.add('hidden');
           connectTabBtn.classList.add('hidden');
           focusTabBtn.classList.add('hidden');
@@ -137,8 +205,8 @@ document.addEventListener('DOMContentLoaded', () => {
   connectTabBtn.addEventListener('click', () => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       chrome.storage.local.set({ connectedTabId: tabs[0].id }, () => {
-        statusDiv.textContent = 'Switched connection to this tab';
-        statusDiv.className = 'status-connected';
+        statusText.textContent = 'SWITCHED TO THIS TAB';
+        statusBadge.className = 'connection-status badge-connected';
         connectBtn.classList.add('hidden');
         connectTabBtn.classList.add('hidden');
         focusTabBtn.classList.add('hidden');
@@ -159,8 +227,8 @@ document.addEventListener('DOMContentLoaded', () => {
   disconnectBtn.addEventListener('click', () => {
     chrome.runtime.sendMessage({ cmd: 'disconnect' }, (_response) => {
       chrome.storage.local.remove('connectedTabId', () => {
-        statusDiv.textContent = 'Disconnected';
-        statusDiv.className = 'status-disconnected';
+        statusText.textContent = 'DISCONNECTED';
+        statusBadge.className = 'connection-status badge-disconnected';
         refreshUIForActiveTab();
       });
     });
@@ -184,7 +252,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (message.controlState) {
         updateControlPanel(message.controlState);
       }
-      
       if (['Connected', 'Disconnected', 'WebSocket error', 'Failed to open WebSocket'].includes(message.status)) {
         refreshUIForActiveTab();
       }
