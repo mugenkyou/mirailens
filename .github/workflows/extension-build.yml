@@ -64,7 +64,7 @@ jobs:
           zip -r ../mirailens-extension.zip . -x "*.git*"
 
       - name: Upload Extension Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mirailens-extension
           path: mirailens-extension.zip
