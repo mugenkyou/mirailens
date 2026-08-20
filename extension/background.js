@@ -39,6 +39,8 @@ let activeTabId = null;
 let reconnectAttempt = 0;
 let lastErrorMessage = '';
 let serverUrl = 'ws://127.0.0.1:29100';
+let ws = null;
+const pendingPreviews = new Map();
 // controlState is managed via persistence; default set in initControlState
 
 // ---------- Chrome API helpers (callback-based, safe in MV3) ----------
@@ -233,18 +235,158 @@ async function handleWait(payload) {
 
 async function handleClick(payload) {
   const tabId = await getActiveTabId();
-  if (tabId && payload.selector) {
-    await exec(tabId, (selector) => {
-      const element = document.querySelector(selector);
-      if (element) {
-        element.click();
-        return true;
-      }
-      return false;
-    }, [payload.selector]);
-    return true;
+  const selector = payload.element || payload.selector;
+  
+  if (!tabId || !selector) return false;
+  
+  if (pendingPreviews.has(tabId)) {
+    throw new Error("Another action is awaiting human approval.");
   }
-  return false;
+  
+  return new Promise((resolve, reject) => {
+    const actionId = Math.random().toString(36).substr(2, 9);
+    
+    const timeoutId = setTimeout(() => {
+      if (pendingPreviews.has(tabId)) {
+        pendingPreviews.delete(tabId);
+        exec(tabId, () => {
+          const ui = document.getElementById('mirailens-preview-overlay');
+          if (ui) ui.remove();
+        }).catch(() => {});
+        reject(new Error("Human approval timed out."));
+      }
+    }, 30000); // 30s timeout
+    
+    pendingPreviews.set(tabId, { actionId, status: 'PENDING', resolve, reject, timeoutId });
+    
+    exec(tabId, (sel) => {
+      return new Promise((res, rej) => {
+        const elements = document.querySelectorAll(sel);
+        if (elements.length === 0) {
+           return res({ error: "Target selector matched zero elements." });
+        }
+        if (elements.length > 1) {
+           return res({ error: "Target selector matched multiple elements." });
+        }
+        
+        const target = elements[0];
+        
+        target.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
+        
+        const rect = target.getBoundingClientRect();
+        
+        const overlayHost = document.createElement('div');
+        overlayHost.id = 'mirailens-preview-overlay';
+        overlayHost.style.position = 'fixed';
+        overlayHost.style.top = '0';
+        overlayHost.style.left = '0';
+        overlayHost.style.width = '100vw';
+        overlayHost.style.height = '100vh';
+        overlayHost.style.zIndex = '2147483647';
+        overlayHost.style.pointerEvents = 'none';
+        
+        const shadow = overlayHost.attachShadow({ mode: 'closed' });
+        
+        const highlight = document.createElement('div');
+        highlight.style.position = 'absolute';
+        highlight.style.left = rect.left + 'px';
+        highlight.style.top = rect.top + 'px';
+        highlight.style.width = rect.width + 'px';
+        highlight.style.height = rect.height + 'px';
+        highlight.style.border = '3px solid #ff00ff';
+        highlight.style.boxSizing = 'border-box';
+        highlight.style.backgroundColor = 'rgba(255, 0, 255, 0.2)';
+        highlight.style.pointerEvents = 'none';
+        
+        const panel = document.createElement('div');
+        panel.style.position = 'absolute';
+        panel.style.left = Math.max(0, rect.left) + 'px';
+        panel.style.top = Math.max(0, rect.bottom + 10) + 'px';
+        panel.style.backgroundColor = '#ffffff';
+        panel.style.border = '1px solid #ccc';
+        panel.style.borderRadius = '6px';
+        panel.style.padding = '12px';
+        panel.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+        panel.style.fontFamily = 'system-ui, sans-serif';
+        panel.style.pointerEvents = 'auto';
+        panel.style.display = 'flex';
+        panel.style.flexDirection = 'column';
+        panel.style.gap = '8px';
+        panel.style.color = '#000';
+        
+        const title = document.createElement('div');
+        title.innerHTML = '<strong>MiraiLens</strong><br/>AI wants to click this element.';
+        title.style.fontSize = '14px';
+        panel.appendChild(title);
+        
+        const btnRow = document.createElement('div');
+        btnRow.style.display = 'flex';
+        btnRow.style.gap = '8px';
+        
+        const btnDeny = document.createElement('button');
+        btnDeny.textContent = 'DENY';
+        btnDeny.style.background = '#dc3545';
+        btnDeny.style.color = '#fff';
+        btnDeny.style.border = 'none';
+        btnDeny.style.padding = '6px 12px';
+        btnDeny.style.borderRadius = '4px';
+        btnDeny.style.cursor = 'pointer';
+        
+        const btnApprove = document.createElement('button');
+        btnApprove.textContent = 'APPROVE';
+        btnApprove.style.background = '#28a745';
+        btnApprove.style.color = '#fff';
+        btnApprove.style.border = 'none';
+        btnApprove.style.padding = '6px 12px';
+        btnApprove.style.borderRadius = '4px';
+        btnApprove.style.cursor = 'pointer';
+        
+        btnRow.appendChild(btnDeny);
+        btnRow.appendChild(btnApprove);
+        panel.appendChild(btnRow);
+        
+        shadow.appendChild(highlight);
+        shadow.appendChild(panel);
+        document.body.appendChild(overlayHost);
+        
+        btnDeny.addEventListener('click', () => {
+          overlayHost.remove();
+          res({ action: 'deny' });
+        });
+        
+        btnApprove.addEventListener('click', () => {
+          overlayHost.remove();
+          target.click();
+          res({ action: 'approve' });
+        });
+      });
+    }, [selector]).then((injectionResult) => {
+      if (!pendingPreviews.has(tabId)) return;
+      const pending = pendingPreviews.get(tabId);
+      clearTimeout(pending.timeoutId);
+      pendingPreviews.delete(tabId);
+      
+      if (!injectionResult) {
+         return reject(new Error("Failed to inject preview UI or tab closed."));
+      }
+      if (injectionResult.error) {
+         return reject(new Error(injectionResult.error));
+      }
+      if (injectionResult.action === 'deny') {
+         return resolve({ approved: false, reason: "Human denied the action" });
+      }
+      if (injectionResult.action === 'approve') {
+         return resolve(true);
+      }
+      return reject(new Error("Unknown preview result"));
+    }).catch((err) => {
+      if (pendingPreviews.has(tabId)) {
+        clearTimeout(pendingPreviews.get(tabId).timeoutId);
+        pendingPreviews.delete(tabId);
+      }
+      reject(err);
+    });
+  });
 }
 
 async function handleType(payload) {
@@ -390,6 +532,17 @@ function connect() {
       sendPopupStatus('Disconnected');
       const attempt = ++reconnectAttempt;
       ws = null;
+      
+      for (const [tabId, pending] of pendingPreviews.entries()) {
+        clearTimeout(pending.timeoutId);
+        pending.reject(new Error("WebSocket disconnected."));
+        exec(tabId, () => {
+          const ui = document.getElementById('mirailens-preview-overlay');
+          if (ui) ui.remove();
+        }).catch(() => {});
+      }
+      pendingPreviews.clear();
+      
       const delay = Math.min(30000, 1000 * Math.pow(2, attempt));
       setTimeout(() => {
         if (!ws) connect();
@@ -427,6 +580,19 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
 chrome.tabs.onRemoved.addListener((tabId) => {
   if (activeTabId === tabId) {
     activeTabId = null;
+  }
+  if (pendingPreviews.has(tabId)) {
+    clearTimeout(pendingPreviews.get(tabId).timeoutId);
+    pendingPreviews.get(tabId).reject(new Error("Tab closed."));
+    pendingPreviews.delete(tabId);
+  }
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  if (changeInfo.status === 'loading' && pendingPreviews.has(tabId)) {
+    clearTimeout(pendingPreviews.get(tabId).timeoutId);
+    pendingPreviews.get(tabId).reject(new Error("Tab navigated."));
+    pendingPreviews.delete(tabId);
   }
 });
 
