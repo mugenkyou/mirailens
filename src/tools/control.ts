@@ -52,7 +52,7 @@ export const get_agent_status: Tool = {
             state: context.controlState,
             connectionStatus: "connected",
             allowedToExecute: allowed,
-            warning: "Fallback to mirrored state: " + String(e.message || e)
+            warning: "Fallback to mirrored state: " + String((e as any).message || e)
           }, null, 2)
         }]
       };

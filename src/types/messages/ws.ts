@@ -16,6 +16,7 @@ export interface SocketMessageMap {
   getTitle: {};
   browser_control: { action: string };
   get_control_state: {};
+  get_agent_status: {};
 }
 
 export type MessageType<T> = keyof T;
