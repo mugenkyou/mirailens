@@ -1,202 +1,291 @@
-                                 Apache License
-                           Version 2.0, January 2004
-                        http://www.apache.org/licenses/
+# MiraiLens Community Non-Commercial License
 
-TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+**Version 1.0 — August 2026**
 
-1.  Definitions.
+Copyright © 2026 Sachin Patel. All rights reserved except for the
+permissions expressly granted by this License.
 
-    "License" shall mean the terms and conditions for use, reproduction,
-    and distribution as defined by Sections 1 through 9 of this document.
+---
 
-    "Licensor" shall mean the copyright owner or entity authorized by
-    the copyright owner that is granting the License.
+## 1. Purpose
 
-    "Legal Entity" shall mean the union of the acting entity and all
-    other entities that control, are controlled by, or are under common
-    control with that entity. For the purposes of this definition,
-    "control" means (i) the power, direct or indirect, to cause the
-    direction or management of such entity, whether by contract or
-    otherwise, or (ii) ownership of fifty percent (50%) or more of the
-    outstanding shares, or (iii) beneficial ownership of such entity.
+This License permits individuals to use, study, modify, and contribute to
+the MiraiLens software for personal, educational, research, experimental,
+and other non-commercial purposes.
 
-    "You" (or "Your") shall mean an individual or Legal Entity
-    exercising permissions granted by this License.
+Commercial use requires separate written permission from the copyright
+holder.
 
-    "Source" form shall mean the preferred form for making modifications,
-    including but not limited to software source code, documentation
-    source, and configuration files.
+---
 
-    "Object" form shall mean any form resulting from mechanical
-    transformation or translation of a Source form, including but
-    not limited to compiled object code, generated documentation,
-    and conversions to other media types.
+## 2. Definitions
 
-    "Work" shall mean the work of authorship, whether in Source or
-    Object form, made available under the License, as indicated by a
-    copyright notice that is included in or attached to the work
-    (an example is provided in the Appendix below).
+### "Software"
 
-    "Derivative Works" shall mean any work, whether in Source or Object
-    form, that is based on (or derived from) the Work and for which the
-    editorial revisions, annotations, elaborations, or other modifications
-    represent, as a whole, an original work of authorship. For the purposes
-    of this License, Derivative Works shall not include works that remain
-    separable from, or merely link (or bind by name) to the interfaces of,
-    the Work and Derivative Works thereof.
+"Software" means the MiraiLens source code, documentation, configuration
+files, and other materials distributed by the project under this License.
 
-    "Contribution" shall mean any work of authorship, including
-    the original version of the Work and any modifications or additions
-    to that Work or Derivative Works thereof, that is intentionally
-    submitted to Licensor for inclusion in the Work by the copyright owner
-    or by an individual or Legal Entity authorized to submit on behalf of
-    the copyright owner. For the purposes of this definition, "submitted"
-    means any form of electronic, verbal, or written communication sent
-    to the Licensor or its representatives, including but not limited to
-    communication on electronic mailing lists, source code control systems,
-    and issue tracking systems that are managed by, or on behalf of, the
-    Licensor for the purpose of discussing and improving the Work, but
-    excluding communication that is conspicuously marked or otherwise
-    designated in writing by the copyright owner as "Not a Contribution."
+### "You"
 
-    "Contributor" shall mean Licensor and any individual or Legal Entity
-    on behalf of whom a Contribution has been received by Licensor and
-    subsequently incorporated within the Work.
+"You" means an individual person exercising rights granted under this
+License.
 
-2.  Grant of Copyright License. Subject to the terms and conditions of
-    this License, each Contributor hereby grants to You a perpetual,
-    worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-    copyright license to reproduce, prepare Derivative Works of,
-    publicly display, publicly perform, sublicense, and distribute the
-    Work and such Derivative Works in Source or Object form.
+### "Commercial Use"
 
-3.  Grant of Patent License. Subject to the terms and conditions of
-    this License, each Contributor hereby grants to You a perpetual,
-    worldwide, non-exclusive, no-charge, royalty-free, irrevocable
-    (except as stated in this section) patent license to make, have made,
-    use, offer to sell, sell, import, and otherwise transfer the Work,
-    where such license applies only to those patent claims licensable
-    by such Contributor that are necessarily infringed by their
-    Contribution(s) alone or by combination of their Contribution(s)
-    with the Work to which such Contribution(s) was submitted. If You
-    institute patent litigation against any entity (including a
-    cross-claim or counterclaim in a lawsuit) alleging that the Work
-    or a Contribution incorporated within the Work constitutes direct
-    or contributory patent infringement, then any patent licenses
-    granted to You under this License for that Work shall terminate
-    as of the date such litigation is filed.
+"Commercial Use" means using, modifying, deploying, distributing,
+integrating, hosting, or otherwise incorporating the Software primarily
+for commercial purposes, including:
 
-4.  Redistribution. You may reproduce and distribute copies of the
-    Work or Derivative Works thereof in any medium, with or without
-    modifications, and in Source or Object form, provided that You
-    meet the following conditions:
+- selling the Software or a modified version;
+- incorporating the Software into a paid product or service;
+- providing paid services substantially based on the Software;
+- operating a commercial SaaS or hosted service based on the Software;
+- using the Software as part of a commercial business operation; or
+- otherwise using the Software to directly or indirectly generate
+  commercial revenue.
 
-    (a) You must give any other recipients of the Work or
-    Derivative Works a copy of this License; and
+---
 
-    (b) You must cause any modified files to carry prominent notices
-    stating that You changed the files; and
+## 3. Permitted Non-Commercial Use
 
-    (c) You must retain, in the Source form of any Derivative Works
-    that You distribute, all copyright, patent, trademark, and
-    attribution notices from the Source form of the Work,
-    excluding those notices that do not pertain to any part of
-    the Derivative Works; and
+Subject to this License, an individual may use MiraiLens free of charge
+for:
 
-    (d) If the Work includes a "NOTICE" text file as part of its
-    distribution, then any Derivative Works that You distribute must
-    include a readable copy of the attribution notices contained
-    within such NOTICE file, excluding those notices that do not
-    pertain to any part of the Derivative Works, in at least one
-    of the following places: within a NOTICE text file distributed
-    as part of the Derivative Works; within the Source form or
-    documentation, if provided along with the Derivative Works; or,
-    within a display generated by the Derivative Works, if and
-    wherever such third-party notices normally appear. The contents
-    of the NOTICE file are for informational purposes only and
-    do not modify the License. You may add Your own attribution
-    notices within Derivative Works that You distribute, alongside
-    or as an addendum to the NOTICE text from the Work, provided
-    that such additional attribution notices cannot be construed
-    as modifying the License.
+- personal projects;
+- educational purposes;
+- academic research;
+- experimentation;
+- evaluation;
+- learning and development;
+- non-commercial open-source projects; and
+- other lawful non-commercial purposes.
 
-    You may add Your own copyright statement to Your modifications and
-    may provide additional or different license terms and conditions
-    for use, reproduction, or distribution of Your modifications, or
-    for any such Derivative Works as a whole, provided Your use,
-    reproduction, and distribution of the Work otherwise complies with
-    the conditions stated in this License.
+You may:
 
-5.  Submission of Contributions. Unless You explicitly state otherwise,
-    any Contribution intentionally submitted for inclusion in the Work
-    by You to the Licensor shall be under the terms and conditions of
-    this License, without any additional terms or conditions.
-    Notwithstanding the above, nothing herein shall supersede or modify
-    the terms of any separate license agreement you may have executed
-    with Licensor regarding such Contributions.
+- use the Software;
+- study the Software;
+- run the Software;
+- copy the Software;
+- modify the Software;
+- create derivative works;
+- privately maintain modified versions; and
+- share the Software with others for permitted non-commercial purposes.
 
-6.  Trademarks. This License does not grant permission to use the trade
-    names, trademarks, service marks, or product names of the Licensor,
-    except as required for reasonable and customary use in describing the
-    origin of the Work and reproducing the content of the NOTICE file.
+---
 
-7.  Disclaimer of Warranty. Unless required by applicable law or
-    agreed to in writing, Licensor provides the Work (and each
-    Contributor provides its Contributions) on an "AS IS" BASIS,
-    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
-    implied, including, without limitation, any warranties or conditions
-    of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
-    PARTICULAR PURPOSE. You are solely responsible for determining the
-    appropriateness of using or redistributing the Work and assume any
-    risks associated with Your exercise of permissions under this License.
+## 4. Modification
 
-8.  Limitation of Liability. In no event and under no legal theory,
-    whether in tort (including negligence), contract, or otherwise,
-    unless required by applicable law (such as deliberate and grossly
-    negligent acts) or agreed to in writing, shall any Contributor be
-    liable to You for damages, including any direct, indirect, special,
-    incidental, or consequential damages of any character arising as a
-    result of this License or out of the use or inability to use the
-    Work (including but not limited to damages for loss of goodwill,
-    work stoppage, computer failure or malfunction, or any and all
-    other commercial damages or losses), even if such Contributor
-    has been advised of the possibility of such damages.
+You are permitted to modify the Software for non-commercial purposes.
 
-9.  Accepting Warranty or Additional Liability. While redistributing
-    the Work or Derivative Works thereof, You may choose to offer,
-    and charge a fee for, acceptance of support, warranty, indemnity,
-    or other liability obligations and/or rights consistent with this
-    License. However, in accepting such obligations, You may act only
-    on Your own behalf and on Your sole responsibility, not on behalf
-    of any other Contributor, and only if You agree to indemnify,
-    defend, and hold each Contributor harmless for any liability
-    incurred by, or claims asserted against, such Contributor by reason
-    of your accepting any such warranty or additional liability.
+If You distribute a modified version, You must:
 
-END OF TERMS AND CONDITIONS
+1. retain this License;
+2. retain applicable copyright and attribution notices;
+3. clearly indicate that modifications were made;
+4. identify the modified version as being derived from MiraiLens; and
+5. not represent the modified version as the official MiraiLens release.
 
-APPENDIX: How to apply the Apache License to your work.
+Modified versions must not falsely imply endorsement, sponsorship, or
+official affiliation with MiraiLens.
 
-      To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "[]"
-      replaced with your own identifying information. (Don't include
-      the brackets!)  The text should be enclosed in the appropriate
-      comment syntax for the file format. We also recommend that a
-      file or class name and description of purpose be included on the
-      same "printed page" as the copyright notice for easier
-      identification within third-party archives.
+---
 
-Portions Copyright (c) Microsoft Corporation.
-Portions Copyright 2017 Google Inc.
+## 5. Attribution
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+When distributing a modified version of MiraiLens, You must provide
+reasonable attribution to the original project.
 
-       http://www.apache.org/licenses/LICENSE-2.0
+The attribution should identify:
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+**MiraiLens — developed by Sachin Patel**
+
+and include a link to the official MiraiLens project repository where
+reasonably practical.
+
+Example:
+
+> Based on MiraiLens by Sachin Patel  
+> https://github.com/mugenkyou/mcp-server-mirailens
+
+You may additionally identify your own modifications and contributors.
+
+Nothing in this section prevents You from accurately identifying the
+authors of your own original contributions.
+
+---
+
+## 6. Contributions and Pull Requests
+
+Contributions to MiraiLens are welcome.
+
+You may:
+
+- fork the repository;
+- create branches;
+- modify the source code;
+- submit issues;
+- submit pull requests;
+- propose improvements;
+- submit bug fixes; and
+- contribute documentation or other project improvements.
+
+Submitting a pull request does not automatically transfer ownership of
+your original work to the project.
+
+Unless a separate written agreement states otherwise, contributors retain
+the rights they hold in their own original contributions.
+
+By submitting a contribution for inclusion in MiraiLens, You represent that
+You have the necessary rights to submit that contribution and that its
+inclusion does not knowingly violate another person's rights.
+
+Accepted contributions may be incorporated into future MiraiLens releases
+under the project's applicable licensing terms.
+
+---
+
+## 7. Commercial Use
+
+Commercial use is **not permitted** under this License.
+
+Without prior written permission from the copyright holder, You may not:
+
+- sell MiraiLens;
+- sell modified versions of MiraiLens;
+- include MiraiLens in a paid commercial product;
+- use MiraiLens as a component of a paid service;
+- operate a commercial SaaS or hosted service substantially based on
+  MiraiLens;
+- provide paid services substantially based on MiraiLens; or
+- deploy MiraiLens for commercial internal business operations.
+
+This restriction applies even when MiraiLens itself is distributed free of
+charge.
+
+---
+
+## 8. Commercial Licensing
+
+Businesses, organizations, and other commercial users may contact the
+copyright holder to request separate commercial licensing.
+
+Commercial permission is not granted automatically by this License.
+
+A separate written agreement may establish different terms, including
+commercial usage rights, fees, attribution requirements, support
+arrangements, or other conditions.
+
+---
+
+## 9. Project Name and Trademarks
+
+This License does not grant permission to use the MiraiLens name, logos,
+trademarks, service marks, or other branding in a manner that suggests
+that a modified or redistributed version is an official MiraiLens release.
+
+You may refer to MiraiLens for truthful identification purposes.
+
+For example:
+
+> "Based on MiraiLens"
+
+is permitted when used accurately and without implying endorsement.
+
+---
+
+## 10. No Warranty
+
+THE SOFTWARE IS PROVIDED **"AS IS"**, WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, OR
+NON-INFRINGEMENT.
+
+YOU ARE SOLELY RESPONSIBLE FOR DETERMINING WHETHER THE SOFTWARE IS
+SUITABLE FOR YOUR INTENDED USE.
+
+---
+
+## 11. Limitation of Liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE COPYRIGHT HOLDER
+AND CONTRIBUTORS SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, CONSEQUENTIAL, OR OTHER DAMAGES ARISING FROM THE USE OF, OR
+INABILITY TO USE, THE SOFTWARE.
+
+This limitation applies to the maximum extent permitted by applicable law.
+
+---
+
+## 12. Intellectual Property
+
+Except for the rights expressly granted by this License, no rights are
+granted under any copyright, patent, trademark, or other intellectual
+property right.
+
+Nothing in this License transfers ownership of the MiraiLens project or
+its intellectual property.
+
+---
+
+## 13. Termination
+
+The rights granted under this License automatically terminate if You
+materially violate its terms.
+
+Upon termination, You must cease exercising the permissions granted by
+this License.
+
+Termination does not affect rights that cannot legally be terminated or
+rights that have otherwise been lawfully acquired.
+
+---
+
+## 14. Separate Agreements
+
+The copyright holder may grant additional rights through a separate
+written agreement.
+
+If a separate written commercial license conflicts with this License, the
+separate written agreement controls for the rights specifically granted
+under that agreement.
+
+---
+
+## 15. Acceptance
+
+By using, modifying, or distributing MiraiLens under this License, You
+agree to comply with its terms.
+
+If You do not agree to these terms, You may not exercise the permissions
+granted by this License.
+
+---
+
+## Summary
+
+| Use | Permission |
+|---|---|
+| Personal use | Allowed |
+| Educational use | Allowed |
+| Academic research | Allowed |
+| Private modification | Allowed |
+| Non-commercial modification | Allowed |
+| Forking | Allowed |
+| Pull requests | Allowed |
+| Non-commercial redistribution | Allowed |
+| Commercial use | **Not allowed** |
+| Commercial SaaS | **Not allowed without permission** |
+| Selling MiraiLens | **Not allowed** |
+| Selling a modified version | **Not allowed** |
+| Commercial license | Available separately |
+| MiraiLens trademark | Not automatically licensed |
+
+---
+
+## Attribution
+
+When distributing a modified version, provide reasonable attribution:
+
+**MiraiLens — developed by Sachin Patel**
+
+https://github.com/mugenkyou/mcp-server-mirailens
