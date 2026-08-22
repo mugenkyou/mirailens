@@ -623,6 +623,66 @@ async function handleClick(payload) {
         
         panel.appendChild(riskDisplay);
         
+        let autoApproveInterval = null;
+        let isDeniedOrApproved = false;
+
+        let warningText = null;
+        if (riskData.level === 'LOW') {
+          const autoText = document.createElement('div');
+          autoText.style.fontSize = '13px';
+          autoText.style.fontWeight = 'bold';
+          autoText.style.color = '#17a2b8';
+          autoText.style.marginBottom = '8px';
+          
+          let countdown = 4;
+          autoText.textContent = `Auto-approving in ${countdown}...`;
+          panel.appendChild(autoText);
+          
+          console.log('[MiraiLens] LOW risk: countdown started at', countdown);
+          autoApproveInterval = setInterval(() => {
+            if (isDeniedOrApproved) {
+              console.log('[MiraiLens] Interval tick skipped: already denied/approved.');
+              clearInterval(autoApproveInterval);
+              return;
+            }
+            countdown--;
+            console.log('[MiraiLens] Countdown value:', countdown);
+            if (countdown > 0) {
+              autoText.textContent = `Auto-approving in ${countdown}...`;
+            } else {
+              console.log('[MiraiLens] Countdown reached zero.');
+              clearInterval(autoApproveInterval);
+              if (!isDeniedOrApproved) {
+                isDeniedOrApproved = true;
+                console.log('[MiraiLens] Auto approval triggered.');
+                overlayHost.remove();
+                
+                // Resolve first to avoid navigation race conditions blocking the response
+                res({ action: 'approve' });
+                console.log('[MiraiLens] Promise resolved.');
+                
+                // Execute click slightly after to guarantee message is sent
+                setTimeout(() => {
+                  try {
+                    target.click();
+                    console.log('[MiraiLens] target.click() executed.');
+                  } catch (e) {
+                    console.error('[MiraiLens] target.click() failed:', e);
+                  }
+                }, 10);
+              }
+            }
+          }, 1000);
+        } else if (riskData.level === 'HIGH' || riskData.level === 'UNKNOWN') {
+          warningText = document.createElement('div');
+          warningText.style.fontSize = '13px';
+          warningText.style.fontWeight = 'bold';
+          warningText.style.color = '#dc3545';
+          warningText.style.marginBottom = '8px';
+          warningText.textContent = riskData.level === 'HIGH' ? '⚠ HIGH RISK' : '⚠ UNKNOWN RISK';
+          panel.appendChild(warningText);
+        }
+        
         const btnRow = document.createElement('div');
         btnRow.style.display = 'flex';
         btnRow.style.gap = '8px';
@@ -637,16 +697,28 @@ async function handleClick(payload) {
         btnDeny.style.cursor = 'pointer';
         
         const btnApprove = document.createElement('button');
-        btnApprove.textContent = 'APPROVE';
-        btnApprove.style.background = '#28a745';
-        btnApprove.style.color = '#fff';
-        btnApprove.style.border = 'none';
-        btnApprove.style.padding = '6px 12px';
-        btnApprove.style.borderRadius = '4px';
-        btnApprove.style.cursor = 'pointer';
+        if (riskData.level === 'HIGH' || riskData.level === 'UNKNOWN') {
+          btnApprove.textContent = 'CONFIRM DANGER';
+          btnApprove.style.background = '#dc3545';
+          btnApprove.style.color = '#fff';
+          btnApprove.style.border = 'none';
+          btnApprove.style.padding = '6px 12px';
+          btnApprove.style.borderRadius = '4px';
+          btnApprove.style.cursor = 'pointer';
+        } else {
+          btnApprove.textContent = 'APPROVE';
+          btnApprove.style.background = '#28a745';
+          btnApprove.style.color = '#fff';
+          btnApprove.style.border = 'none';
+          btnApprove.style.padding = '6px 12px';
+          btnApprove.style.borderRadius = '4px';
+          btnApprove.style.cursor = 'pointer';
+        }
         
         btnRow.appendChild(btnDeny);
-        btnRow.appendChild(btnApprove);
+        if (riskData.level !== 'LOW') {
+          btnRow.appendChild(btnApprove);
+        }
         panel.appendChild(btnRow);
         
         shadow.appendChild(highlight);
@@ -654,15 +726,34 @@ async function handleClick(payload) {
         document.body.appendChild(overlayHost);
         
         btnDeny.addEventListener('click', () => {
+          if (isDeniedOrApproved) return;
+          isDeniedOrApproved = true;
+          if (autoApproveInterval) clearInterval(autoApproveInterval);
           overlayHost.remove();
           res({ action: 'deny' });
         });
         
-        btnApprove.addEventListener('click', () => {
-          overlayHost.remove();
-          target.click();
-          res({ action: 'approve' });
-        });
+        let highRiskConfirmStep = false;
+        
+        if (riskData.level !== 'LOW') {
+          btnApprove.addEventListener('click', () => {
+            if (isDeniedOrApproved) return;
+            
+            if ((riskData.level === 'HIGH' || riskData.level === 'UNKNOWN') && !highRiskConfirmStep) {
+              highRiskConfirmStep = true;
+              if (warningText) {
+                warningText.textContent = '⚠ CONFIRM THIS DANGEROUS ACTION';
+              }
+              return;
+            }
+            
+            isDeniedOrApproved = true;
+            if (autoApproveInterval) clearInterval(autoApproveInterval);
+            overlayHost.remove();
+            target.click();
+            res({ action: 'approve' });
+          });
+        }
       });
     }, [selector]).then((injectionResult) => {
       if (!pendingPreviews.has(tabId)) return;
