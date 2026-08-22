@@ -500,6 +500,47 @@ async function handleClick(payload) {
         
         const target = elements[0];
         
+        function analyzeRisk(el) {
+          try {
+            const text = (el.innerText || el.textContent || '').toLowerCase().trim();
+            const tag = el.tagName.toLowerCase();
+            const type = (el.getAttribute('type') || '').toLowerCase();
+            const href = (el.getAttribute('href') || '').toLowerCase();
+            const form = el.closest('form');
+            
+            const highKeywords = ['delete', 'remove', 'erase', 'destroy', 'terminate', 'close account', 'delete account', 'cancel subscription', 'pay', 'purchase', 'buy', 'transfer', 'withdraw', 'send money', 'confirm payment'];
+            const mediumKeywords = ['submit', 'save', 'update', 'change', 'edit', 'confirm', 'send', 'apply', 'publish', 'upload', 'create'];
+            
+            let level = 'LOW';
+            const reasons = [];
+            
+            if (highKeywords.some(kw => text.includes(kw) || href.includes(kw))) {
+              level = 'HIGH';
+              reasons.push(`Contains high-risk keyword.`);
+            } else if (mediumKeywords.some(kw => text.includes(kw) || href.includes(kw))) {
+              level = 'MEDIUM';
+              reasons.push(`Contains medium-risk keyword.`);
+            }
+            
+            if (form) {
+               if (level === 'LOW') {
+                 level = 'MEDIUM';
+               }
+               reasons.push(`Form submission detected.`);
+            }
+            
+            if (level === 'LOW' && reasons.length === 0) {
+               reasons.push(`Standard navigation or informational action.`);
+            }
+            
+            return { level, reasons: [...new Set(reasons)] };
+          } catch (e) {
+            return { level: 'UNKNOWN', reasons: ['Risk analysis failed'] };
+          }
+        }
+        
+        const riskData = analyzeRisk(target);
+        
         target.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
         
         const rect = target.getBoundingClientRect();
@@ -546,7 +587,41 @@ async function handleClick(payload) {
         const title = document.createElement('div');
         title.innerHTML = '<strong>MiraiLens</strong><br/>AI wants to click this element.';
         title.style.fontSize = '14px';
+        title.style.marginBottom = '4px';
         panel.appendChild(title);
+        
+        const riskDisplay = document.createElement('div');
+        riskDisplay.style.fontSize = '13px';
+        riskDisplay.style.marginBottom = '12px';
+        
+        let riskColor = '#28a745'; // LOW
+        if (riskData.level === 'MEDIUM') riskColor = '#d39e00'; // dark yellow
+        if (riskData.level === 'HIGH' || riskData.level === 'UNKNOWN') riskColor = '#dc3545';
+        
+        const riskLabel = document.createElement('strong');
+        riskLabel.style.color = riskColor;
+        riskLabel.textContent = 'Risk: ' + riskData.level;
+        riskDisplay.appendChild(riskLabel);
+        
+        const whyBlock = document.createElement('div');
+        whyBlock.style.marginTop = '4px';
+        whyBlock.style.color = '#555';
+        whyBlock.textContent = 'Why:';
+        
+        const ul = document.createElement('ul');
+        ul.style.margin = '4px 0 0 0';
+        ul.style.paddingLeft = '20px';
+        
+        riskData.reasons.forEach(r => {
+          const li = document.createElement('li');
+          li.textContent = r;
+          ul.appendChild(li);
+        });
+        
+        whyBlock.appendChild(ul);
+        riskDisplay.appendChild(whyBlock);
+        
+        panel.appendChild(riskDisplay);
         
         const btnRow = document.createElement('div');
         btnRow.style.display = 'flex';
