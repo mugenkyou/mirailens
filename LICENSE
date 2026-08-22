@@ -1,13 +1,14 @@
-# MiraiLens Community Non-Commercial License
+                              MIRAILENS COMMUNITY NON-COMMERCIAL LICENSE
 
-**Version 1.0 — August 2026**
+                                   Version 1.0 — August 2026
 
-Copyright © 2026 Sachin Patel. All rights reserved except for the
-permissions expressly granted by this License.
+Copyright (c) 2026 Sachin Patel.
 
----
+All rights reserved except for the permissions expressly granted by this
+License.
 
-## 1. Purpose
+
+1. PURPOSE
 
 This License permits individuals to use, study, modify, and contribute to
 the MiraiLens software for personal, educational, research, experimental,
@@ -16,118 +17,139 @@ and other non-commercial purposes.
 Commercial use requires separate written permission from the copyright
 holder.
 
----
 
-## 2. Definitions
-
-### "Software"
+2. DEFINITIONS
 
 "Software" means the MiraiLens source code, documentation, configuration
 files, and other materials distributed by the project under this License.
 
-### "You"
-
 "You" means an individual person exercising rights granted under this
 License.
-
-### "Commercial Use"
 
 "Commercial Use" means using, modifying, deploying, distributing,
 integrating, hosting, or otherwise incorporating the Software primarily
 for commercial purposes, including:
 
-- selling the Software or a modified version;
-- incorporating the Software into a paid product or service;
-- providing paid services substantially based on the Software;
-- operating a commercial SaaS or hosted service based on the Software;
-- using the Software as part of a commercial business operation; or
-- otherwise using the Software to directly or indirectly generate
-  commercial revenue.
+(a) selling the Software or a modified version;
 
----
+(b) incorporating the Software into a paid product or service;
 
-## 3. Permitted Non-Commercial Use
+(c) providing paid services substantially based on the Software;
+
+(d) operating a commercial SaaS or hosted service based on the Software;
+
+(e) using the Software as part of a commercial business operation; or
+
+(f) otherwise using the Software to directly or indirectly generate
+    commercial revenue.
+
+
+3. PERMITTED NON-COMMERCIAL USE
 
 Subject to this License, an individual may use MiraiLens free of charge
 for:
 
-- personal projects;
-- educational purposes;
-- academic research;
-- experimentation;
-- evaluation;
-- learning and development;
-- non-commercial open-source projects; and
-- other lawful non-commercial purposes.
+(a) personal projects;
+
+(b) educational purposes;
+
+(c) academic research;
+
+(d) experimentation;
+
+(e) evaluation;
+
+(f) learning and development;
+
+(g) non-commercial open-source projects; and
+
+(h) other lawful non-commercial purposes.
 
 You may:
 
-- use the Software;
-- study the Software;
-- run the Software;
-- copy the Software;
-- modify the Software;
-- create derivative works;
-- privately maintain modified versions; and
-- share the Software with others for permitted non-commercial purposes.
+(a) use the Software;
 
----
+(b) study the Software;
 
-## 4. Modification
+(c) run the Software;
+
+(d) copy the Software;
+
+(e) modify the Software;
+
+(f) create derivative works;
+
+(g) privately maintain modified versions; and
+
+(h) share the Software with others for permitted non-commercial purposes.
+
+
+4. MODIFICATION
 
 You are permitted to modify the Software for non-commercial purposes.
 
 If You distribute a modified version, You must:
 
-1. retain this License;
-2. retain applicable copyright and attribution notices;
-3. clearly indicate that modifications were made;
-4. identify the modified version as being derived from MiraiLens; and
-5. not represent the modified version as the official MiraiLens release.
+(a) retain this License;
+
+(b) retain applicable copyright and attribution notices;
+
+(c) clearly indicate that modifications were made;
+
+(d) identify the modified version as being derived from MiraiLens; and
+
+(e) not represent the modified version as the official MiraiLens release.
 
 Modified versions must not falsely imply endorsement, sponsorship, or
 official affiliation with MiraiLens.
 
----
 
-## 5. Attribution
+5. ATTRIBUTION
 
 When distributing a modified version of MiraiLens, You must provide
 reasonable attribution to the original project.
 
-The attribution should identify:
+The attribution must identify:
 
-**MiraiLens — developed by Sachin Patel**
+"MiraiLens — developed by Sachin Patel"
 
 and include a link to the official MiraiLens project repository where
-reasonably practical.
+reasonably practical:
 
-Example:
+https://github.com/mugenkyou/mcp-server-mirailens
 
-> Based on MiraiLens by Sachin Patel  
-> https://github.com/mugenkyou/mcp-server-mirailens
+Example attribution:
+
+"Based on MiraiLens by Sachin Patel"
+https://github.com/mugenkyou/mcp-server-mirailens
 
 You may additionally identify your own modifications and contributors.
 
 Nothing in this section prevents You from accurately identifying the
 authors of your own original contributions.
 
----
 
-## 6. Contributions and Pull Requests
+6. CONTRIBUTIONS AND PULL REQUESTS
 
 Contributions to MiraiLens are welcome.
 
 You may:
 
-- fork the repository;
-- create branches;
-- modify the source code;
-- submit issues;
-- submit pull requests;
-- propose improvements;
-- submit bug fixes; and
-- contribute documentation or other project improvements.
+(a) fork the repository;
+
+(b) create branches;
+
+(c) modify the source code;
+
+(d) submit issues;
+
+(e) submit pull requests;
+
+(f) propose improvements;
+
+(g) submit bug fixes; and
+
+(h) contribute documentation or other project improvements.
 
 Submitting a pull request does not automatically transfer ownership of
 your original work to the project.
@@ -142,29 +164,33 @@ inclusion does not knowingly violate another person's rights.
 Accepted contributions may be incorporated into future MiraiLens releases
 under the project's applicable licensing terms.
 
----
 
-## 7. Commercial Use
+7. COMMERCIAL USE
 
-Commercial use is **not permitted** under this License.
+Commercial Use is NOT permitted under this License.
 
 Without prior written permission from the copyright holder, You may not:
 
-- sell MiraiLens;
-- sell modified versions of MiraiLens;
-- include MiraiLens in a paid commercial product;
-- use MiraiLens as a component of a paid service;
-- operate a commercial SaaS or hosted service substantially based on
-  MiraiLens;
-- provide paid services substantially based on MiraiLens; or
-- deploy MiraiLens for commercial internal business operations.
+(a) sell MiraiLens;
 
-This restriction applies even when MiraiLens itself is distributed free of
-charge.
+(b) sell modified versions of MiraiLens;
 
----
+(c) include MiraiLens in a paid commercial product;
 
-## 8. Commercial Licensing
+(d) use MiraiLens as a component of a paid service;
+
+(e) operate a commercial SaaS or hosted service substantially based on
+    MiraiLens;
+
+(f) provide paid services substantially based on MiraiLens; or
+
+(g) deploy MiraiLens for commercial internal business operations.
+
+This restriction applies even when MiraiLens itself is distributed free
+of charge.
+
+
+8. COMMERCIAL LICENSING
 
 Businesses, organizations, and other commercial users may contact the
 copyright holder to request separate commercial licensing.
@@ -175,9 +201,8 @@ A separate written agreement may establish different terms, including
 commercial usage rights, fees, attribution requirements, support
 arrangements, or other conditions.
 
----
 
-## 9. Project Name and Trademarks
+9. PROJECT NAME AND TRADEMARKS
 
 This License does not grant permission to use the MiraiLens name, logos,
 trademarks, service marks, or other branding in a manner that suggests
@@ -187,25 +212,22 @@ You may refer to MiraiLens for truthful identification purposes.
 
 For example:
 
-> "Based on MiraiLens"
+"Based on MiraiLens"
 
 is permitted when used accurately and without implying endorsement.
 
----
 
-## 10. No Warranty
+10. NO WARRANTY
 
-THE SOFTWARE IS PROVIDED **"AS IS"**, WITHOUT WARRANTY OF ANY KIND,
-EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF
-MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, OR
-NON-INFRINGEMENT.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, TITLE, OR NON-INFRINGEMENT.
 
 YOU ARE SOLELY RESPONSIBLE FOR DETERMINING WHETHER THE SOFTWARE IS
 SUITABLE FOR YOUR INTENDED USE.
 
----
 
-## 11. Limitation of Liability
+11. LIMITATION OF LIABILITY
 
 TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, THE COPYRIGHT HOLDER
 AND CONTRIBUTORS SHALL NOT BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
@@ -214,9 +236,8 @@ INABILITY TO USE, THE SOFTWARE.
 
 This limitation applies to the maximum extent permitted by applicable law.
 
----
 
-## 12. Intellectual Property
+12. INTELLECTUAL PROPERTY
 
 Except for the rights expressly granted by this License, no rights are
 granted under any copyright, patent, trademark, or other intellectual
@@ -225,9 +246,8 @@ property right.
 Nothing in this License transfers ownership of the MiraiLens project or
 its intellectual property.
 
----
 
-## 13. Termination
+13. TERMINATION
 
 The rights granted under this License automatically terminate if You
 materially violate its terms.
@@ -238,20 +258,18 @@ this License.
 Termination does not affect rights that cannot legally be terminated or
 rights that have otherwise been lawfully acquired.
 
----
 
-## 14. Separate Agreements
+14. SEPARATE AGREEMENTS
 
 The copyright holder may grant additional rights through a separate
 written agreement.
 
-If a separate written commercial license conflicts with this License, the
-separate written agreement controls for the rights specifically granted
-under that agreement.
+If a separate written commercial license conflicts with this License,
+the separate written agreement controls for the rights specifically
+granted under that agreement.
 
----
 
-## 15. Acceptance
+15. ACCEPTANCE
 
 By using, modifying, or distributing MiraiLens under this License, You
 agree to comply with its terms.
@@ -259,33 +277,5 @@ agree to comply with its terms.
 If You do not agree to these terms, You may not exercise the permissions
 granted by this License.
 
----
 
-## Summary
-
-| Use | Permission |
-|---|---|
-| Personal use | Allowed |
-| Educational use | Allowed |
-| Academic research | Allowed |
-| Private modification | Allowed |
-| Non-commercial modification | Allowed |
-| Forking | Allowed |
-| Pull requests | Allowed |
-| Non-commercial redistribution | Allowed |
-| Commercial use | **Not allowed** |
-| Commercial SaaS | **Not allowed without permission** |
-| Selling MiraiLens | **Not allowed** |
-| Selling a modified version | **Not allowed** |
-| Commercial license | Available separately |
-| MiraiLens trademark | Not automatically licensed |
-
----
-
-## Attribution
-
-When distributing a modified version, provide reasonable attribution:
-
-**MiraiLens — developed by Sachin Patel**
-
-https://github.com/mugenkyou/mcp-server-mirailens
+END OF LICENSE
