@@ -22,7 +22,26 @@ const TRANSITION_MATRIX = {
 
 const CONTROL_STATE_KEY = 'controlState';
 let controlState = STATES.IDLE; // default, overridden by init
-let activeAction = null; // { id, type, reject }
+let activeAction = null; // { id, type, auditRecord, reject }
+
+const auditLog = [];
+
+function recordAudit(record) {
+  try {
+    record.id = record.id || crypto.randomUUID();
+    record.timestamp = record.timestamp || Date.now();
+    auditLog.unshift(record);
+    if (auditLog.length > 100) {
+      auditLog.length = 100;
+    }
+  } catch (e) {
+    console.warn("[Phase6] Audit logging failed:", e);
+  }
+}
+
+function clearAuditLog() {
+  auditLog.length = 0;
+}
 
 let isEmergencyStop = false;
 let pausedBy = null;
@@ -463,8 +482,25 @@ async function handleMCPMessage(message) {
     const selector = typeof rawSelector === 'string' && rawSelector.trim() ? rawSelector : null;
 
     let beforeState = null;
+    let auditRecord = null;
     
     if (shouldVerify) {
+      auditRecord = {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        action: type,
+        target: selector,
+        risk: 'UNKNOWN',
+        decision: 'UNKNOWN',
+        execution: 'UNKNOWN',
+        outcome: null,
+        reasons: [],
+        urlBefore: null,
+        urlAfter: null
+      };
+      recordAudit(auditRecord);
+      console.log('[Phase6] Audit started');
+
       if (selector) {
         console.log(`[Phase5] Verification enabled: ${type}`);
         console.log('[Phase5] Capturing before state');
@@ -491,6 +527,7 @@ async function handleMCPMessage(message) {
       activeAction = {
         id,
         type,
+        auditRecord,
         reject: (err) => {
           actionRejected = true;
           reject(err);
@@ -508,6 +545,22 @@ async function handleMCPMessage(message) {
     try {
       const result = await actionPromise;
       activeAction = null;
+      
+      if (auditRecord) {
+        console.log(`[Phase6] Risk recorded: ${auditRecord.risk}`);
+        if (result && result.approved === false) {
+           auditRecord.decision = auditRecord.decision !== 'UNKNOWN' ? auditRecord.decision : 'HUMAN_DENIED';
+           auditRecord.execution = 'NOT_EXECUTED';
+           auditRecord.outcome = 'DENIED';
+        } else if (result !== false) {
+           auditRecord.execution = 'EXECUTED';
+        } else {
+           auditRecord.execution = 'NOT_EXECUTED';
+        }
+        console.log(`[Phase6] Decision recorded: ${auditRecord.decision}`);
+        console.log(`[Phase6] Execution recorded: ${auditRecord.execution}`);
+      }
+
       let verification = null;
       if (shouldVerify && selector) {
         console.log('[Phase5] Action completed');
@@ -525,6 +578,14 @@ async function handleMCPMessage(message) {
         }
       }
 
+      if (verification && auditRecord) {
+        auditRecord.outcome = verification.outcome;
+        if (verification.reasons) auditRecord.reasons = [...verification.reasons];
+        if (verification.before && verification.before.url) auditRecord.urlBefore = verification.before.url;
+        if (verification.after && verification.after.url) auditRecord.urlAfter = verification.after.url;
+        console.log(`[Phase6] Outcome recorded: ${auditRecord.outcome}`);
+      }
+
       if (controlState === STATES.AGENT_RUNNING) {
         transitionTo(STATES.IDLE, 'finish_action');
       }
@@ -539,8 +600,26 @@ async function handleMCPMessage(message) {
       }
 
       sendResponse(id, type, finalResult);
+      if (auditRecord) {
+        console.log('[Phase6] Audit completed');
+      }
     } catch (e) {
       activeAction = null;
+      if (auditRecord) {
+        const msg = e.message || String(e);
+        if (msg.includes('HUMAN_TAKEOVER')) {
+           auditRecord.decision = 'HUMAN_TAKEOVER';
+           auditRecord.execution = 'NOT_EXECUTED';
+           auditRecord.outcome = 'UNKNOWN';
+        } else {
+           auditRecord.execution = 'FAILED';
+           auditRecord.outcome = 'FAILED';
+           auditRecord.reasons.push(msg);
+        }
+        console.log(`[Phase6] Decision recorded: ${auditRecord.decision}`);
+        console.log(`[Phase6] Execution recorded: ${auditRecord.execution}`);
+        console.log('[Phase6] Audit completed (catch)');
+      }
       sendError(id, type, { allowed: false, reason: e.message || String(e), controlState });
       if (!actionRejected && controlState === STATES.AGENT_RUNNING) {
         transitionTo(STATES.IDLE, 'action_failed');
@@ -804,7 +883,7 @@ async function handleClick(payload) {
                 overlayHost.remove();
                 
                 // Resolve first to avoid navigation race conditions blocking the response
-                res({ action: 'approve' });
+                res({ action: 'approve', risk: riskData.level, decision: 'AUTO_APPROVED' });
                 console.log('[MiraiLens] Promise resolved.');
                 
                 // Execute click slightly after to guarantee message is sent
@@ -876,7 +955,7 @@ async function handleClick(payload) {
           isDeniedOrApproved = true;
           if (autoApproveInterval) clearInterval(autoApproveInterval);
           overlayHost.remove();
-          res({ action: 'deny' });
+          res({ action: 'deny', risk: riskData.level, decision: 'HUMAN_DENIED' });
         });
         
         let highRiskConfirmStep = false;
@@ -897,7 +976,7 @@ async function handleClick(payload) {
             if (autoApproveInterval) clearInterval(autoApproveInterval);
             overlayHost.remove();
             target.click();
-            res({ action: 'approve' });
+            res({ action: 'approve', risk: riskData.level, decision: 'HUMAN_APPROVED' });
           });
         }
       });
@@ -914,9 +993,17 @@ async function handleClick(payload) {
          return reject(new Error(injectionResult.error));
       }
       if (injectionResult.action === 'deny') {
+         if (activeAction && activeAction.auditRecord) {
+           activeAction.auditRecord.risk = injectionResult.risk || 'UNKNOWN';
+           activeAction.auditRecord.decision = injectionResult.decision || 'HUMAN_DENIED';
+         }
          return resolve({ approved: false, reason: "Human denied the action" });
       }
       if (injectionResult.action === 'approve') {
+         if (activeAction && activeAction.auditRecord) {
+           activeAction.auditRecord.risk = injectionResult.risk || 'UNKNOWN';
+           activeAction.auditRecord.decision = injectionResult.decision || 'HUMAN_APPROVED';
+         }
          return resolve(true);
       }
       return reject(new Error("Unknown preview result"));
@@ -1239,6 +1326,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.cmd === 'control_action') {
     // Messages from popup are human-initiated
     handleControlAction(msg.action, 'human');
+    sendResponse({ success: true });
+    return false;
+  }
+  
+  if (msg?.cmd === 'getAuditLog') {
+    sendResponse({ auditLog });
+    return false;
+  }
+  
+  if (msg?.cmd === 'clearAuditLog') {
+    clearAuditLog();
     sendResponse({ success: true });
     return false;
   }
