@@ -33,13 +33,27 @@ export const click: Tool = {
   },
   handle: async (context: Context, params) => {
     const validatedParams = ClickTool.shape.arguments.parse(params);
-    await context.sendSocketMessage("browser_click", validatedParams);
+    const clickResult = (await context.sendSocketMessage(
+      "browser_click",
+      validatedParams,
+    )) as Record<string, any>;
+    
     const snapshot = await captureAriaSnapshot(context);
+    
+    let verificationText = "";
+    if (clickResult && clickResult.verification) {
+      const v = clickResult.verification;
+      verificationText = `\n\nAction Verification: ${v.outcome}`;
+      if (v.reasons && Array.isArray(v.reasons) && v.reasons.length > 0) {
+        verificationText += `\nReason: ${v.reasons.join("\n")}`;
+      }
+    }
+
     return {
       content: [
         {
           type: "text",
-          text: `Clicked "${validatedParams.element}"`,
+          text: `Clicked "${validatedParams.element}"${verificationText}`,
         },
         ...snapshot.content,
       ],

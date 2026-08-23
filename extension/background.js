@@ -304,6 +304,106 @@ async function handleGetConsoleLogs() {
   return []; // Fallback for console logs
 }
 
+async function captureActionState(tabId, selector) {
+  if (!tabId || typeof selector !== 'string' || !selector.trim()) {
+    return null;
+  }
+  try {
+    return await exec(tabId, (sel) => {
+      const state = {
+        url: window.location.href,
+        title: document.title,
+        targetExists: false,
+        targetText: null,
+        targetAttributes: {},
+        parentText: null
+      };
+      if (sel) {
+        try {
+          const el = document.querySelector(sel);
+          if (el) {
+            state.targetExists = true;
+            state.targetText = (el.innerText || el.textContent || '').trim().substring(0, 200);
+            const attrs = ['value', 'checked', 'disabled', 'aria-expanded', 'aria-pressed', 'href'];
+            for (const attr of attrs) {
+              let val = el.getAttribute(attr);
+              if (val === null && attr in el) {
+                val = el[attr];
+              }
+              if (val !== null && val !== undefined && val !== '') {
+                state.targetAttributes[attr] = String(val);
+              }
+            }
+            const parent = el.closest('form, article, main, section, div');
+            if (parent) {
+              state.parentText = (parent.innerText || parent.textContent || '').trim().substring(0, 500);
+            }
+          }
+        } catch(e) {}
+      }
+      return state;
+    }, [selector]);
+  } catch (e) {
+    return null;
+  }
+}
+
+function verifyActionOutcome(before, after) {
+  if (!before || !after) {
+    return { outcome: 'UNKNOWN', before, after, reasons: ['Unable to verify post-action state.'] };
+  }
+
+  const reasons = [];
+  let outcome = 'UNKNOWN';
+
+  if (before.url !== after.url) {
+    reasons.push(`URL changed from ${before.url} to ${after.url}`);
+    return { outcome: 'EXPECTED_CHANGE', before, after, reasons };
+  }
+
+  if (before.targetExists && !after.targetExists) {
+    reasons.push('Target element disappeared.');
+    return { outcome: 'EXPECTED_CHANGE', before, after, reasons };
+  }
+
+  if (before.targetExists && after.targetExists) {
+    let changed = false;
+    if (before.targetText !== after.targetText) {
+      reasons.push('Target text changed.');
+      changed = true;
+    }
+    
+    for (const key of Object.keys(before.targetAttributes)) {
+      if (before.targetAttributes[key] !== after.targetAttributes[key]) {
+        reasons.push(`Attribute ${key} changed.`);
+        changed = true;
+      }
+    }
+    
+    for (const key of Object.keys(after.targetAttributes)) {
+      if (before.targetAttributes[key] === undefined) {
+        reasons.push(`Attribute ${key} added.`);
+        changed = true;
+      }
+    }
+    
+    if (changed) {
+      return { outcome: 'VERIFIED', before, after, reasons };
+    }
+  }
+  
+  if (after.parentText && before.parentText !== after.parentText) {
+    const lowerAfter = after.parentText.toLowerCase();
+    if (lowerAfter.includes('success') || lowerAfter.includes('saved') || lowerAfter.includes('done') || lowerAfter.includes('thank')) {
+       reasons.push('Success indicator found in parent context.');
+       return { outcome: 'VERIFIED', before, after, reasons };
+    }
+  }
+
+  reasons.push('No observable changes detected.');
+  return { outcome, before, after, reasons };
+}
+
 async function handleMCPMessage(message) {
   try {
     const { type, payload, id } = message;
@@ -358,6 +458,25 @@ async function handleMCPMessage(message) {
       return;
     }
 
+    const shouldVerify = type === 'browser_click' || type === 'browser_type';
+    const rawSelector = payload ? (payload.element || payload.selector) : null;
+    const selector = typeof rawSelector === 'string' && rawSelector.trim() ? rawSelector : null;
+
+    let beforeState = null;
+    
+    if (shouldVerify) {
+      if (selector) {
+        console.log(`[Phase5] Verification enabled: ${type}`);
+        console.log('[Phase5] Capturing before state');
+        const tabId = await getActiveTabId();
+        beforeState = await captureActionState(tabId, selector);
+      } else {
+        console.log('[Phase5] Verification skipped: invalid selector');
+      }
+    } else {
+      console.log(`[Phase5] Verification skipped for: ${type}`);
+    }
+
     // Transition to AGENT_RUNNING if we are IDLE or AGENT_RESUMING
     if (controlState === STATES.IDLE || controlState === STATES.AGENT_RESUMING) {
       const transitioned = transitionTo(STATES.AGENT_RUNNING, 'start_action');
@@ -389,10 +508,37 @@ async function handleMCPMessage(message) {
     try {
       const result = await actionPromise;
       activeAction = null;
+      let verification = null;
+      if (shouldVerify && selector) {
+        console.log('[Phase5] Action completed');
+        if (beforeState && result !== false && !(result && result.approved === false)) {
+          await new Promise(r => setTimeout(r, 1500));
+          console.log('[Phase5] Capturing after state');
+          const currentTabId = await getActiveTabId();
+          const afterState = await captureActionState(currentTabId, selector);
+          verification = verifyActionOutcome(beforeState, afterState);
+          console.log('[Phase5] Verification outcome:', verification.outcome);
+        } else if (result && result.approved === false) {
+          // Human denied action, do not verify
+        } else {
+          verification = { outcome: 'UNKNOWN', reasons: ['Unable to verify post-action state.'] };
+        }
+      }
+
       if (controlState === STATES.AGENT_RUNNING) {
         transitionTo(STATES.IDLE, 'finish_action');
       }
-      sendResponse(id, type, result);
+      
+      let finalResult = result;
+      if (verification) {
+        if (typeof result === 'object' && result !== null) {
+          finalResult = { ...result, verification };
+        } else {
+          finalResult = { original_result: result, verification };
+        }
+      }
+
+      sendResponse(id, type, finalResult);
     } catch (e) {
       activeAction = null;
       sendError(id, type, { allowed: false, reason: e.message || String(e), controlState });
