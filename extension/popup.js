@@ -176,7 +176,46 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  function refreshAuditLog() {
+    chrome.runtime.sendMessage({ cmd: 'getAuditLog' }, (response) => {
+      const container = document.getElementById('audit-log-container');
+      if (!container) return;
+      if (!response || !response.auditLog || response.auditLog.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: #666; padding: 10px;">No audit records</div>';
+        return;
+      }
+      
+      container.innerHTML = '';
+      response.auditLog.forEach(record => {
+        const time = new Date(record.timestamp).toLocaleTimeString([], { hour12: false });
+        let div = document.createElement('div');
+        div.style.borderBottom = '1px solid #333';
+        div.style.paddingBottom = '8px';
+        
+        let html = `<div style="color: #999;">${time}</div>`;
+        html += `<div><strong>${record.action}</strong> &rarr; "${record.target || 'N/A'}"</div>`;
+        html += `<div>Risk: <span style="color: ${record.risk === 'LOW' ? '#17a2b8' : record.risk === 'HIGH' ? '#dc3545' : record.risk === 'MEDIUM' ? '#ffc107' : '#999'}">${record.risk}</span></div>`;
+        html += `<div>Decision: ${record.decision}</div>`;
+        html += `<div>Execution: ${record.execution}</div>`;
+        html += `<div>Outcome: ${record.outcome || 'N/A'}</div>`;
+        
+        div.innerHTML = html;
+        container.appendChild(div);
+      });
+    });
+  }
+
   refreshUIForActiveTab();
+  refreshAuditLog();
+
+  const btnClearAudit = document.getElementById('btn-clear-audit');
+  if (btnClearAudit) {
+    btnClearAudit.addEventListener('click', () => {
+      chrome.runtime.sendMessage({ cmd: 'clearAuditLog' }, () => {
+        refreshAuditLog();
+      });
+    });
+  }
 
   connectBtn.addEventListener('click', () => {
     statusText.textContent = 'CONNECTING...';
