@@ -250,6 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
     policyTrustedDomains.addEventListener('input', savePolicySettings);
 
     loadPolicySettings();
+    window.refreshPolicyUIInputs = loadPolicySettings;
   }
 
   refreshUIForActiveTab();
@@ -334,6 +335,17 @@ document.addEventListener('DOMContentLoaded', () => {
   btnStop.addEventListener('click', () => sendControlAction('EMERGENCY_STOP'));
   btnReset.addEventListener('click', () => sendControlAction('RESET_STOP'));
 
+  const btnSettings = document.getElementById('btn-settings');
+  if (btnSettings) {
+    btnSettings.addEventListener('click', () => {
+      if (chrome.runtime.openOptionsPage) {
+        chrome.runtime.openOptionsPage();
+      } else {
+        window.open(chrome.runtime.getURL('options.html'));
+      }
+    });
+  }
+
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.status) {
       if (message.controlState) {
@@ -356,8 +368,13 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.connectedTabId) {
-      refreshUIForActiveTab();
+    if (area === 'local') {
+      if (changes.connectedTabId) {
+        refreshUIForActiveTab();
+      }
+      if (changes.mirailensPolicy && window.refreshPolicyUIInputs) {
+        window.refreshPolicyUIInputs();
+      }
     }
   });
 });

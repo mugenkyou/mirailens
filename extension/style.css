@@ -7,14 +7,14 @@ body {
   min-width: 360px;
   max-width: 400px;
   background-color: #050505;
-  color: #E5E5E5;
+  color: #F2F2F2;
   box-sizing: border-box;
 }
 
 .console-panel {
   background-color: #0A0A0A;
   border: 1px solid #1C1C1C;
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 12px;
   box-sizing: border-box;
   display: flex;
@@ -45,7 +45,7 @@ body {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.5px;
-  color: #E5E5E5;
+  color: #F2F2F2;
   text-transform: uppercase;
 }
 
@@ -53,30 +53,27 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  color: #888888;
+  font-size: 10px;
+  font-weight: 600;
+  color: #9A9A9A;
+  font-family: 'IBM Plex Mono', monospace;
 }
 
 .status-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   background-color: #444444;
   border-radius: 50%;
-  transition: background-color 200ms ease;
+  transition: background-color 150ms ease;
 }
 
 /* Connection States */
-.badge-connected .status-dot,
-.status-connected .status-dot {
+.badge-connected .status-dot {
   background-color: #B6FF00;
-  box-shadow: 0 0 4px rgba(182, 255, 0, 0.4);
 }
 
-.badge-disconnected .status-dot,
-.status-disconnected .status-dot {
-  background-color: #555555;
-  box-shadow: none;
+.badge-disconnected .status-dot {
+  background-color: #666666;
 }
 
 .divider {
@@ -87,7 +84,7 @@ body {
 
 .section-title {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   letter-spacing: 1px;
   color: #666666;
@@ -105,7 +102,7 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Control state layout - Flat neutral */
+/* Control state layout - Flat */
 .control-state-box {
   display: flex;
   flex-direction: column;
@@ -116,59 +113,57 @@ body {
 .status-indicator {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-size: 11px;
   font-weight: 600;
-  color: #E5E5E5;
+  color: #F2F2F2;
   text-transform: uppercase;
 }
 
 .status-indicator-dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   background-color: #444444;
   border-radius: 50%;
 }
 
-/* State changes mapping indicator */
+/* State changes mapping indicators */
 .badge-connected .status-indicator-dot,
 .badge-idle .status-indicator-dot {
   background-color: #B6FF00;
-  box-shadow: 0 0 4px rgba(182, 255, 0, 0.4);
 }
 .badge-working .status-indicator-dot {
   background-color: #B6FF00;
-  box-shadow: 0 0 4px rgba(182, 255, 0, 0.4);
 }
 .badge-waiting .status-indicator-dot {
-  background-color: #FFA500;
+  background-color: #E7C85A;
 }
 .badge-controlling .status-indicator-dot {
-  background-color: #00BFFF;
+  background-color: #9A9A9A;
 }
 .badge-blocked .status-indicator-dot {
-  background-color: #FF4500;
+  background-color: #FF5555;
 }
 .badge-completed .status-indicator-dot {
   background-color: #B6FF00;
 }
 .badge-failed .status-indicator-dot {
-  background-color: #FF4500;
+  background-color: #FF5555;
 }
 
 .desc-text {
   font-size: 11px;
-  color: #888888;
+  color: #9A9A9A;
   line-height: 1.4;
 }
 
 .tab-box {
   padding: 4px 0;
   font-size: 11px;
-  color: #E5E5E5;
+  color: #F2F2F2;
 }
 
-/* Telemetry Table */
+/* Telemetry Table - Compact Layout */
 .telemetry-table {
   display: flex;
   flex-direction: column;
@@ -190,7 +185,7 @@ body {
 
 .telemetry-value {
   font-size: 10px;
-  color: #E5E5E5;
+  color: #F2F2F2;
 }
 
 /* Actions Grid and Buttons */
@@ -206,7 +201,7 @@ body {
   width: 100%;
   height: 38px;
   padding: 0 12px;
-  border-radius: 3px;
+  border-radius: 6px;
   font-family: 'IBM Plex Sans', sans-serif;
   font-size: 11px;
   font-weight: 600;
@@ -216,7 +211,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   line-height: 36px;
-  transition: all 120ms ease;
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
   background-color: #101010;
   border: 1px solid #1C1C1C;
   color: #E5E5E5;
@@ -226,17 +221,36 @@ body {
 .btn:hover {
   background-color: #151815;
   border-color: #2A2A2A;
+  color: #F2F2F2;
 }
 
 .btn-primary {
-  border-color: #B6FF00;
-  color: #E5E5E5;
+  border-color: #8AC700;
+  color: #F2F2F2;
 }
 
 .btn-primary:hover {
   background-color: #B6FF00;
   color: #050505;
   border-color: #B6FF00;
+}
+
+.btn-secondary {
+  background-color: #101010;
+  border-color: #1C1C1C;
+  color: #9A9A9A;
+}
+
+.btn-secondary:hover {
+  background-color: #151815;
+  border-color: #2A2A2A;
+  color: #F2F2F2;
+}
+
+#disconnect:hover {
+  background-color: #2A1515;
+  border-color: #FF5555;
+  color: #FF5555;
 }
 
 .btn-danger {
@@ -247,8 +261,8 @@ body {
 }
 
 .btn-danger:hover {
-  background-color: #522B2B;
-  color: #FFFFFF;
+  background-color: #FF5555;
+  color: #050505;
   border-color: #FF5555;
 }
 
@@ -267,7 +281,7 @@ body {
   padding: 8px 10px;
   background-color: #101010;
   border: 1px solid #522B2B;
-  border-radius: 3px;
+  border-radius: 6px;
   color: #FF5555;
   font-family: 'IBM Plex Mono', monospace;
   font-size: 11px;
@@ -281,12 +295,19 @@ body {
   margin-top: 16px;
 }
 
-/* Policy Settings */
+/* Policy Settings styling */
 .policy-settings-box {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 4px 0;
+}
+
+.policy-subtitle {
+  font-size: 11px;
+  color: #9A9A9A;
+  margin-top: -2px;
+  margin-bottom: 8px;
 }
 
 .policy-setting-row {
@@ -307,33 +328,73 @@ body {
   font-weight: 500;
 }
 
+/* Custom Switch Toggle styling */
 #policy-draft-only {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 32px;
+  height: 18px;
+  background-color: #101010;
+  border: 1px solid #1C1C1C;
+  border-radius: 9px;
+  position: relative;
+  outline: none;
   cursor: pointer;
-  accent-color: #B6FF00;
+  transition: background-color 150ms ease, border-color 150ms ease;
 }
 
+#policy-draft-only:checked {
+  background-color: #B6FF00;
+  border-color: #B6FF00;
+}
+
+#policy-draft-only::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  background-color: #9A9A9A;
+  border-radius: 50%;
+  transition: transform 150ms ease, background-color 150ms ease;
+}
+
+#policy-draft-only:checked::before {
+  transform: translateX(14px);
+  background-color: #050505;
+}
+
+/* Custom Select Dropdown styling */
 #policy-sensitive-fields {
-  background-color: #0A0A0A;
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: #101010;
   border: 1px solid #1C1C1C;
-  color: #E5E5E5;
-  border-radius: 3px;
+  color: #F2F2F2;
+  border-radius: 6px;
   font-size: 10px;
-  padding: 4px 8px;
+  font-weight: 600;
+  padding: 4px 20px 4px 8px;
   outline: none;
   cursor: pointer;
   transition: border-color 150ms ease;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'><path fill='%23666666' d='M0 2l4 4 4-4z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
 }
 
 #policy-sensitive-fields:focus {
   border-color: #B6FF00;
 }
 
+/* Custom Inputs styling */
 #policy-blocked-domains,
 #policy-trusted-domains {
   background-color: #0A0A0A;
   border: 1px solid #1C1C1C;
-  color: #E5E5E5;
-  border-radius: 3px;
+  color: #F2F2F2;
+  border-radius: 6px;
   font-size: 11px;
   padding: 6px 8px;
   outline: none;
@@ -357,7 +418,7 @@ body {
 .btn-small {
   background: none;
   border: 1px solid #1C1C1C;
-  color: #888888;
+  color: #666666;
   cursor: pointer;
   border-radius: 3px;
   font-size: 9px;
@@ -368,7 +429,7 @@ body {
 
 .btn-small:hover {
   border-color: #2A2A2A;
-  color: #E5E5E5;
+  color: #F2F2F2;
   background-color: #101010;
 }
 
@@ -379,7 +440,7 @@ body {
   font-size: 11px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   padding: 4px 0;
 }
 
@@ -387,4 +448,72 @@ body {
   text-align: center;
   color: #444444;
   padding: 12px;
+}
+
+.audit-record {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid #1C1C1C;
+  font-size: 11px;
+  color: #9A9A9A;
+}
+
+.audit-record:last-child {
+  border-bottom: none;
+}
+
+.audit-time {
+  color: #666666;
+  width: 65px;
+  flex-shrink: 0;
+}
+
+.audit-action {
+  color: #F2F2F2;
+  flex-grow: 1;
+  padding-right: 8px;
+  font-weight: 500;
+}
+
+.audit-status {
+  width: 65px;
+  text-align: right;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+/* Header Settings button controls */
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background-color: #0A0A0A;
+  border: 1px solid #1C1C1C;
+  color: #9A9A9A;
+  border-radius: 4px;
+  cursor: pointer;
+  outline: none;
+  transition: all 150ms ease;
+  padding: 0;
+}
+
+.btn-icon:hover {
+  background-color: #101010;
+  border-color: #2A2A2A;
+  color: #F2F2F2;
+}
+
+.btn-icon:focus {
+  border-color: #B6FF00;
+  color: #B6FF00;
 }

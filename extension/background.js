@@ -179,10 +179,13 @@ async function inspectElementProperties(tabId, selector) {
 }
 
 function initControlState() {
-  chrome.storage.local.get([CONTROL_STATE_KEY, 'isEmergencyStop', 'pausedBy', 'connectedTabId', POLICY_KEY], (data) => {
+  chrome.storage.local.get([CONTROL_STATE_KEY, 'isEmergencyStop', 'pausedBy', 'connectedTabId', POLICY_KEY, 'serverUrl'], (data) => {
     isEmergencyStop = !!data.isEmergencyStop;
     pausedBy = data.pausedBy || null;
     connectedTabId = data.connectedTabId || null;
+    if (data.serverUrl) {
+      serverUrl = data.serverUrl;
+    }
 
     // Load policy
     if (data[POLICY_KEY]) {
@@ -239,6 +242,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
     }
     if (changes.pausedBy) {
       pausedBy = changes.pausedBy.newValue || null;
+    }
+    if (changes.serverUrl) {
+      serverUrl = changes.serverUrl.newValue || 'ws://127.0.0.1:29100';
     }
     if (changes[POLICY_KEY]) {
       const val = changes[POLICY_KEY].newValue;

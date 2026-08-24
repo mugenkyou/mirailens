@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MiraiLens Settings</title>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+      body {
+        max-width: 760px;
+        margin: 40px auto;
+        padding: 0 24px;
+        background-color: #050505;
+        color: #F2F2F2;
+      }
+      .settings-container {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+      .settings-header {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        border-bottom: 1px solid #1C1C1C;
+        padding-bottom: 16px;
+      }
+      .settings-brand-link {
+        font-size: 16px;
+        font-weight: 700;
+        letter-spacing: 1px;
+        color: #F2F2F2;
+        text-decoration: none;
+        text-transform: uppercase;
+        display: inline-block;
+        transition: color 150ms ease;
+      }
+      .settings-brand-link:hover {
+        color: #B6FF00;
+      }
+      .settings-title {
+        font-size: 20px;
+        font-weight: 700;
+        margin: 4px 0 0 0;
+        color: #F2F2F2;
+      }
+      .settings-description {
+        font-size: 12px;
+        color: #9A9A9A;
+      }
+      .settings-section {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .settings-group {
+        background-color: #0A0A0A;
+        border: 1px solid #1C1C1C;
+        border-radius: 6px;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .setting-item-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #1C1C1C;
+        padding-bottom: 16px;
+      }
+      .setting-item-row:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+      .setting-item-col {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        border-bottom: 1px solid #1C1C1C;
+        padding-bottom: 16px;
+      }
+      .setting-item-col:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+      .setting-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #F2F2F2;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .setting-info {
+        font-size: 11px;
+        color: #9A9A9A;
+        margin-top: 2px;
+      }
+      .input-wrapper {
+        display: flex;
+        gap: 8px;
+        width: 100%;
+      }
+      .info-box {
+        font-size: 11px;
+        color: #9A9A9A;
+        line-height: 1.5;
+        padding: 12px;
+        background-color: #101010;
+        border: 1px solid #1C1C1C;
+        border-radius: 6px;
+      }
+      .success-toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background-color: #101010;
+        border: 1px solid #B6FF00;
+        color: #B6FF00;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-family: 'IBM Plex Mono', monospace;
+        opacity: 0;
+        transition: opacity 300ms ease;
+        pointer-events: none;
+      }
+      .success-toast.show {
+        opacity: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="settings-container">
+      <div class="settings-header">
+        <a href="https://mirailens.vercel.app/" target="_blank" class="settings-brand-link" id="brand-link">MIRAILENS</a>
+        <h1 class="settings-title">Settings</h1>
+        <div class="settings-description">Configure browser behavior and security policies.</div>
+      </div>
+
+      <!-- SECTION 1: POLICY -->
+      <div class="settings-section">
+        <div class="section-title">POLICY</div>
+        <div class="settings-group">
+          <div class="setting-item-row">
+            <div>
+              <div class="setting-label">DRAFT-ONLY MODE</div>
+              <div class="setting-info">Prevent form submission when executing browser actions.</div>
+            </div>
+            <input type="checkbox" id="policy-draft-only" />
+          </div>
+          <div class="setting-item-row">
+            <div>
+              <div class="setting-label">SENSITIVE FIELDS</div>
+              <div class="setting-info">Default handling for sensitive fields.</div>
+            </div>
+            <select id="policy-sensitive-fields">
+              <option value="ALWAYS_ASK">ALWAYS ASK</option>
+              <option value="ALWAYS_DENY">ALWAYS DENY</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 2: BLOCKED DOMAINS -->
+      <div class="settings-section">
+        <div class="section-title">BLOCKED DOMAINS</div>
+        <div class="settings-group">
+          <div class="setting-item-col">
+            <div>
+              <div class="setting-label">BLOCKED DOMAINS (comma-separated)</div>
+              <div class="setting-info">Domains MiraiLens must never interact with.</div>
+            </div>
+            <input type="text" id="policy-blocked-domains" placeholder="attacker.com, evil.com" />
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 3: TRUSTED DOMAINS -->
+      <div class="settings-section">
+        <div class="section-title">TRUSTED DOMAINS</div>
+        <div class="settings-group">
+          <div class="setting-item-col">
+            <div>
+              <div class="setting-label">TRUSTED DOMAINS (comma-separated)</div>
+              <div class="setting-info">Domains explicitly trusted for browser automation.</div>
+            </div>
+            <input type="text" id="policy-trusted-domains" placeholder="localhost, 127.0.0.1" />
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 4: CONNECTION -->
+      <div class="settings-section">
+        <div class="section-title">CONNECTION</div>
+        <div class="settings-group">
+          <div class="setting-item-col">
+            <div>
+              <div class="setting-label">MCP SERVER ENDPOINT</div>
+              <div class="setting-info">The WebSocket URL used to connect to the MiraiLens MCP server.</div>
+            </div>
+            <div class="input-wrapper">
+              <input type="text" id="connection-server-url" placeholder="ws://127.0.0.1:29100" />
+              <button id="btn-save-connection" class="btn btn-secondary" style="width: auto; height: 34px; line-height: 32px; margin: 0; padding: 0 16px;">Save</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 5: SECURITY -->
+      <div class="settings-section">
+        <div class="section-title">SECURITY</div>
+        <div class="info-box">
+          MiraiLens evaluates browser actions against extension-enforced policy before execution. Action previews and approvals are bound to single-use verification tokens to prevent replay or spoofing attacks.
+        </div>
+      </div>
+    </div>
+
+    <div id="toast" class="success-toast">SETTINGS SAVED</div>
+
+    <script src="options.js"></script>
+  </body>
+</html>

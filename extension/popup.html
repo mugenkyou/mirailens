@@ -14,9 +14,17 @@
           <img src="icons/favicon-32x32.png" alt="Icon" class="brand-icon" />
           <span class="brand-name">MiraiLens</span>
         </div>
-        <div id="status-badge" class="connection-status">
-          <span class="status-dot"></span>
-          <span id="status-text" class="mono">DISCONNECTED</span>
+        <div class="header-controls">
+          <div id="status-badge" class="connection-status">
+            <span class="status-dot"></span>
+            <span id="status-text" class="mono">DISCONNECTED</span>
+          </div>
+          <button id="btn-settings" class="btn-icon" aria-label="Settings" title="Settings">
+            <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="8" cy="8" r="1.5"></circle>
+              <path d="M12.5 8c0-.3-.2-.5-.4-.7-.4-.3-.6-.8-.5-1.3.1-.4-.1-.9-.5-1.1-.3-.2-.7-.2-1-.1-.5.2-1 .1-1.3-.2-.3-.3-.4-.8-.2-1.3.2-.4.1-.9-.2-1.2s-.8-.4-1.2-.2c-.5.2-1 .1-1.3-.2-.3-.3-.3-.8-.1-1.3-.1-.4-.5-.7-.9-.8H6.9c-.4.1-.8.4-.9.8.2.5.1 1-.2 1.3-.3.3-.8.4-1.3.2-.4-.2-.9-.1-1.2.2s-.3.8-.1 1.2c.2.5.1 1-.2 1.3-.3.3-.8.4-1.3.2H1.9c-.4.2-.6.7-.5 1.1.1.5-.1 1-.5 1.3-.2.2-.2.6-.1.9.3.3.8.4 1.3.2.5-.2 1-.1 1.3.2.3.3.4.8.2 1.3-.2.4-.1.9.2 1.2.3.2.7.2 1 .1.5-.2 1-.1 1.3.2.3.3.3.8.1 1.3.1.4.5.7.9.8h.2c.4-.1.8-.4.9-.8-.2-.5-.1-1 .2-1.3.3-.3.8-.4 1.3-.2.4.2.9.1 1.2-.2.3-.3.3-.8.1-1.2-.2-.5-.1-1 .2-1.3.3-.3.8-.4 1.3-.2.4.2.8 0 .9-.4V8.5c-.1-.2 0-.4.1-.5z"></path>
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -87,30 +95,6 @@
       <div id="last-error" class="error-box hidden"></div>
 
       <div class="divider"></div>
-      <div class="section-title">POLICY SETTINGS</div>
-      <div class="policy-settings-box">
-        <div class="policy-setting-row">
-          <span class="policy-label">DRAFT-ONLY MODE</span>
-          <input type="checkbox" id="policy-draft-only" />
-        </div>
-        <div class="policy-setting-row">
-          <span class="policy-label">SENSITIVE FIELDS</span>
-          <select id="policy-sensitive-fields">
-            <option value="ALWAYS_ASK">ALWAYS ASK</option>
-            <option value="ALWAYS_DENY">ALWAYS DENY</option>
-          </select>
-        </div>
-        <div class="policy-setting-col">
-          <span class="policy-label">BLOCKED DOMAINS (comma-separated)</span>
-          <input type="text" id="policy-blocked-domains" placeholder="attacker.com, evil.com" />
-        </div>
-        <div class="policy-setting-col">
-          <span class="policy-label">TRUSTED DOMAINS (comma-separated)</span>
-          <input type="text" id="policy-trusted-domains" placeholder="localhost, 127.0.0.1" />
-        </div>
-      </div>
-
-      <div class="divider"></div>
 
       <div class="section-title audit-header">
         <span>AUDIT TRAIL</span>
@@ -120,7 +104,7 @@
         <div class="audit-empty">No audit records</div>
       </div>
 
-      <div class="footer mono">v1.1.8</div>
+      <div class="footer mono">v1.2.0</div>
     </div>
     <script src="popup.js"></script>
   </body>
