@@ -22,7 +22,26 @@ const TRANSITION_MATRIX = {
 
 const CONTROL_STATE_KEY = 'controlState';
 let controlState = STATES.IDLE; // default, overridden by init
-let activeAction = null; // { id, type, reject }
+let activeAction = null; // { id, type, auditRecord, reject }
+
+const auditLog = [];
+
+function recordAudit(record) {
+  try {
+    record.id = record.id || crypto.randomUUID();
+    record.timestamp = record.timestamp || Date.now();
+    auditLog.unshift(record);
+    if (auditLog.length > 100) {
+      auditLog.length = 100;
+    }
+  } catch (e) {
+    console.warn("[Phase6] Audit logging failed:", e);
+  }
+}
+
+function clearAuditLog() {
+  auditLog.length = 0;
+}
 
 let isEmergencyStop = false;
 let pausedBy = null;
@@ -304,6 +323,106 @@ async function handleGetConsoleLogs() {
   return []; // Fallback for console logs
 }
 
+async function captureActionState(tabId, selector) {
+  if (!tabId || typeof selector !== 'string' || !selector.trim()) {
+    return null;
+  }
+  try {
+    return await exec(tabId, (sel) => {
+      const state = {
+        url: window.location.href,
+        title: document.title,
+        targetExists: false,
+        targetText: null,
+        targetAttributes: {},
+        parentText: null
+      };
+      if (sel) {
+        try {
+          const el = document.querySelector(sel);
+          if (el) {
+            state.targetExists = true;
+            state.targetText = (el.innerText || el.textContent || '').trim().substring(0, 200);
+            const attrs = ['value', 'checked', 'disabled', 'aria-expanded', 'aria-pressed', 'href'];
+            for (const attr of attrs) {
+              let val = el.getAttribute(attr);
+              if (val === null && attr in el) {
+                val = el[attr];
+              }
+              if (val !== null && val !== undefined && val !== '') {
+                state.targetAttributes[attr] = String(val);
+              }
+            }
+            const parent = el.closest('form, article, main, section, div');
+            if (parent) {
+              state.parentText = (parent.innerText || parent.textContent || '').trim().substring(0, 500);
+            }
+          }
+        } catch(e) {}
+      }
+      return state;
+    }, [selector]);
+  } catch (e) {
+    return null;
+  }
+}
+
+function verifyActionOutcome(before, after) {
+  if (!before || !after) {
+    return { outcome: 'UNKNOWN', before, after, reasons: ['Unable to verify post-action state.'] };
+  }
+
+  const reasons = [];
+  let outcome = 'UNKNOWN';
+
+  if (before.url !== after.url) {
+    reasons.push(`URL changed from ${before.url} to ${after.url}`);
+    return { outcome: 'EXPECTED_CHANGE', before, after, reasons };
+  }
+
+  if (before.targetExists && !after.targetExists) {
+    reasons.push('Target element disappeared.');
+    return { outcome: 'EXPECTED_CHANGE', before, after, reasons };
+  }
+
+  if (before.targetExists && after.targetExists) {
+    let changed = false;
+    if (before.targetText !== after.targetText) {
+      reasons.push('Target text changed.');
+      changed = true;
+    }
+    
+    for (const key of Object.keys(before.targetAttributes)) {
+      if (before.targetAttributes[key] !== after.targetAttributes[key]) {
+        reasons.push(`Attribute ${key} changed.`);
+        changed = true;
+      }
+    }
+    
+    for (const key of Object.keys(after.targetAttributes)) {
+      if (before.targetAttributes[key] === undefined) {
+        reasons.push(`Attribute ${key} added.`);
+        changed = true;
+      }
+    }
+    
+    if (changed) {
+      return { outcome: 'VERIFIED', before, after, reasons };
+    }
+  }
+  
+  if (after.parentText && before.parentText !== after.parentText) {
+    const lowerAfter = after.parentText.toLowerCase();
+    if (lowerAfter.includes('success') || lowerAfter.includes('saved') || lowerAfter.includes('done') || lowerAfter.includes('thank')) {
+       reasons.push('Success indicator found in parent context.');
+       return { outcome: 'VERIFIED', before, after, reasons };
+    }
+  }
+
+  reasons.push('No observable changes detected.');
+  return { outcome, before, after, reasons };
+}
+
 async function handleMCPMessage(message) {
   try {
     const { type, payload, id } = message;
@@ -358,6 +477,42 @@ async function handleMCPMessage(message) {
       return;
     }
 
+    const shouldVerify = type === 'browser_click' || type === 'browser_type';
+    const rawSelector = payload ? (payload.element || payload.selector) : null;
+    const selector = typeof rawSelector === 'string' && rawSelector.trim() ? rawSelector : null;
+
+    let beforeState = null;
+    let auditRecord = null;
+    
+    if (shouldVerify) {
+      auditRecord = {
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        action: type,
+        target: selector,
+        risk: 'UNKNOWN',
+        decision: 'UNKNOWN',
+        execution: 'UNKNOWN',
+        outcome: null,
+        reasons: [],
+        urlBefore: null,
+        urlAfter: null
+      };
+      recordAudit(auditRecord);
+      console.log('[Phase6] Audit started');
+
+      if (selector) {
+        console.log(`[Phase5] Verification enabled: ${type}`);
+        console.log('[Phase5] Capturing before state');
+        const tabId = await getActiveTabId();
+        beforeState = await captureActionState(tabId, selector);
+      } else {
+        console.log('[Phase5] Verification skipped: invalid selector');
+      }
+    } else {
+      console.log(`[Phase5] Verification skipped for: ${type}`);
+    }
+
     // Transition to AGENT_RUNNING if we are IDLE or AGENT_RESUMING
     if (controlState === STATES.IDLE || controlState === STATES.AGENT_RESUMING) {
       const transitioned = transitionTo(STATES.AGENT_RUNNING, 'start_action');
@@ -372,6 +527,7 @@ async function handleMCPMessage(message) {
       activeAction = {
         id,
         type,
+        auditRecord,
         reject: (err) => {
           actionRejected = true;
           reject(err);
@@ -389,12 +545,81 @@ async function handleMCPMessage(message) {
     try {
       const result = await actionPromise;
       activeAction = null;
+      
+      if (auditRecord) {
+        console.log(`[Phase6] Risk recorded: ${auditRecord.risk}`);
+        if (result && result.approved === false) {
+           auditRecord.decision = auditRecord.decision !== 'UNKNOWN' ? auditRecord.decision : 'HUMAN_DENIED';
+           auditRecord.execution = 'NOT_EXECUTED';
+           auditRecord.outcome = 'DENIED';
+        } else if (result !== false) {
+           auditRecord.execution = 'EXECUTED';
+        } else {
+           auditRecord.execution = 'NOT_EXECUTED';
+        }
+        console.log(`[Phase6] Decision recorded: ${auditRecord.decision}`);
+        console.log(`[Phase6] Execution recorded: ${auditRecord.execution}`);
+      }
+
+      let verification = null;
+      if (shouldVerify && selector) {
+        console.log('[Phase5] Action completed');
+        if (beforeState && result !== false && !(result && result.approved === false)) {
+          await new Promise(r => setTimeout(r, 1500));
+          console.log('[Phase5] Capturing after state');
+          const currentTabId = await getActiveTabId();
+          const afterState = await captureActionState(currentTabId, selector);
+          verification = verifyActionOutcome(beforeState, afterState);
+          console.log('[Phase5] Verification outcome:', verification.outcome);
+        } else if (result && result.approved === false) {
+          // Human denied action, do not verify
+        } else {
+          verification = { outcome: 'UNKNOWN', reasons: ['Unable to verify post-action state.'] };
+        }
+      }
+
+      if (verification && auditRecord) {
+        auditRecord.outcome = verification.outcome;
+        if (verification.reasons) auditRecord.reasons = [...verification.reasons];
+        if (verification.before && verification.before.url) auditRecord.urlBefore = verification.before.url;
+        if (verification.after && verification.after.url) auditRecord.urlAfter = verification.after.url;
+        console.log(`[Phase6] Outcome recorded: ${auditRecord.outcome}`);
+      }
+
       if (controlState === STATES.AGENT_RUNNING) {
         transitionTo(STATES.IDLE, 'finish_action');
       }
-      sendResponse(id, type, result);
+      
+      let finalResult = result;
+      if (verification) {
+        if (typeof result === 'object' && result !== null) {
+          finalResult = { ...result, verification };
+        } else {
+          finalResult = { original_result: result, verification };
+        }
+      }
+
+      sendResponse(id, type, finalResult);
+      if (auditRecord) {
+        console.log('[Phase6] Audit completed');
+      }
     } catch (e) {
       activeAction = null;
+      if (auditRecord) {
+        const msg = e.message || String(e);
+        if (msg.includes('HUMAN_TAKEOVER')) {
+           auditRecord.decision = 'HUMAN_TAKEOVER';
+           auditRecord.execution = 'NOT_EXECUTED';
+           auditRecord.outcome = 'UNKNOWN';
+        } else {
+           auditRecord.execution = 'FAILED';
+           auditRecord.outcome = 'FAILED';
+           auditRecord.reasons.push(msg);
+        }
+        console.log(`[Phase6] Decision recorded: ${auditRecord.decision}`);
+        console.log(`[Phase6] Execution recorded: ${auditRecord.execution}`);
+        console.log('[Phase6] Audit completed (catch)');
+      }
       sendError(id, type, { allowed: false, reason: e.message || String(e), controlState });
       if (!actionRejected && controlState === STATES.AGENT_RUNNING) {
         transitionTo(STATES.IDLE, 'action_failed');
@@ -500,6 +725,47 @@ async function handleClick(payload) {
         
         const target = elements[0];
         
+        function analyzeRisk(el) {
+          try {
+            const text = (el.innerText || el.textContent || '').toLowerCase().trim();
+            const tag = el.tagName.toLowerCase();
+            const type = (el.getAttribute('type') || '').toLowerCase();
+            const href = (el.getAttribute('href') || '').toLowerCase();
+            const form = el.closest('form');
+            
+            const highKeywords = ['delete', 'remove', 'erase', 'destroy', 'terminate', 'close account', 'delete account', 'cancel subscription', 'pay', 'purchase', 'buy', 'transfer', 'withdraw', 'send money', 'confirm payment'];
+            const mediumKeywords = ['submit', 'save', 'update', 'change', 'edit', 'confirm', 'send', 'apply', 'publish', 'upload', 'create'];
+            
+            let level = 'LOW';
+            const reasons = [];
+            
+            if (highKeywords.some(kw => text.includes(kw) || href.includes(kw))) {
+              level = 'HIGH';
+              reasons.push(`Contains high-risk keyword.`);
+            } else if (mediumKeywords.some(kw => text.includes(kw) || href.includes(kw))) {
+              level = 'MEDIUM';
+              reasons.push(`Contains medium-risk keyword.`);
+            }
+            
+            if (form) {
+               if (level === 'LOW') {
+                 level = 'MEDIUM';
+               }
+               reasons.push(`Form submission detected.`);
+            }
+            
+            if (level === 'LOW' && reasons.length === 0) {
+               reasons.push(`Standard navigation or informational action.`);
+            }
+            
+            return { level, reasons: [...new Set(reasons)] };
+          } catch (e) {
+            return { level: 'UNKNOWN', reasons: ['Risk analysis failed'] };
+          }
+        }
+        
+        const riskData = analyzeRisk(target);
+        
         target.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
         
         const rect = target.getBoundingClientRect();
@@ -546,7 +812,101 @@ async function handleClick(payload) {
         const title = document.createElement('div');
         title.innerHTML = '<strong>MiraiLens</strong><br/>AI wants to click this element.';
         title.style.fontSize = '14px';
+        title.style.marginBottom = '4px';
         panel.appendChild(title);
+        
+        const riskDisplay = document.createElement('div');
+        riskDisplay.style.fontSize = '13px';
+        riskDisplay.style.marginBottom = '12px';
+        
+        let riskColor = '#28a745'; // LOW
+        if (riskData.level === 'MEDIUM') riskColor = '#d39e00'; // dark yellow
+        if (riskData.level === 'HIGH' || riskData.level === 'UNKNOWN') riskColor = '#dc3545';
+        
+        const riskLabel = document.createElement('strong');
+        riskLabel.style.color = riskColor;
+        riskLabel.textContent = 'Risk: ' + riskData.level;
+        riskDisplay.appendChild(riskLabel);
+        
+        const whyBlock = document.createElement('div');
+        whyBlock.style.marginTop = '4px';
+        whyBlock.style.color = '#555';
+        whyBlock.textContent = 'Why:';
+        
+        const ul = document.createElement('ul');
+        ul.style.margin = '4px 0 0 0';
+        ul.style.paddingLeft = '20px';
+        
+        riskData.reasons.forEach(r => {
+          const li = document.createElement('li');
+          li.textContent = r;
+          ul.appendChild(li);
+        });
+        
+        whyBlock.appendChild(ul);
+        riskDisplay.appendChild(whyBlock);
+        
+        panel.appendChild(riskDisplay);
+        
+        let autoApproveInterval = null;
+        let isDeniedOrApproved = false;
+
+        let warningText = null;
+        if (riskData.level === 'LOW') {
+          const autoText = document.createElement('div');
+          autoText.style.fontSize = '13px';
+          autoText.style.fontWeight = 'bold';
+          autoText.style.color = '#17a2b8';
+          autoText.style.marginBottom = '8px';
+          
+          let countdown = 4;
+          autoText.textContent = `Auto-approving in ${countdown}...`;
+          panel.appendChild(autoText);
+          
+          console.log('[MiraiLens] LOW risk: countdown started at', countdown);
+          autoApproveInterval = setInterval(() => {
+            if (isDeniedOrApproved) {
+              console.log('[MiraiLens] Interval tick skipped: already denied/approved.');
+              clearInterval(autoApproveInterval);
+              return;
+            }
+            countdown--;
+            console.log('[MiraiLens] Countdown value:', countdown);
+            if (countdown > 0) {
+              autoText.textContent = `Auto-approving in ${countdown}...`;
+            } else {
+              console.log('[MiraiLens] Countdown reached zero.');
+              clearInterval(autoApproveInterval);
+              if (!isDeniedOrApproved) {
+                isDeniedOrApproved = true;
+                console.log('[MiraiLens] Auto approval triggered.');
+                overlayHost.remove();
+                
+                // Resolve first to avoid navigation race conditions blocking the response
+                res({ action: 'approve', risk: riskData.level, decision: 'AUTO_APPROVED' });
+                console.log('[MiraiLens] Promise resolved.');
+                
+                // Execute click slightly after to guarantee message is sent
+                setTimeout(() => {
+                  try {
+                    target.click();
+                    console.log('[MiraiLens] target.click() executed.');
+                  } catch (e) {
+                    console.error('[MiraiLens] target.click() failed:', e);
+                  }
+                }, 10);
+              }
+            }
+          }, 1000);
+        } else if (riskData.level === 'HIGH' || riskData.level === 'UNKNOWN') {
+          warningText = document.createElement('div');
+          warningText.style.fontSize = '13px';
+          warningText.style.fontWeight = 'bold';
+          warningText.style.color = '#dc3545';
+          warningText.style.marginBottom = '8px';
+          warningText.textContent = riskData.level === 'HIGH' ? '⚠ HIGH RISK' : '⚠ UNKNOWN RISK';
+          panel.appendChild(warningText);
+        }
         
         const btnRow = document.createElement('div');
         btnRow.style.display = 'flex';
@@ -562,16 +922,28 @@ async function handleClick(payload) {
         btnDeny.style.cursor = 'pointer';
         
         const btnApprove = document.createElement('button');
-        btnApprove.textContent = 'APPROVE';
-        btnApprove.style.background = '#28a745';
-        btnApprove.style.color = '#fff';
-        btnApprove.style.border = 'none';
-        btnApprove.style.padding = '6px 12px';
-        btnApprove.style.borderRadius = '4px';
-        btnApprove.style.cursor = 'pointer';
+        if (riskData.level === 'HIGH' || riskData.level === 'UNKNOWN') {
+          btnApprove.textContent = 'CONFIRM DANGER';
+          btnApprove.style.background = '#dc3545';
+          btnApprove.style.color = '#fff';
+          btnApprove.style.border = 'none';
+          btnApprove.style.padding = '6px 12px';
+          btnApprove.style.borderRadius = '4px';
+          btnApprove.style.cursor = 'pointer';
+        } else {
+          btnApprove.textContent = 'APPROVE';
+          btnApprove.style.background = '#28a745';
+          btnApprove.style.color = '#fff';
+          btnApprove.style.border = 'none';
+          btnApprove.style.padding = '6px 12px';
+          btnApprove.style.borderRadius = '4px';
+          btnApprove.style.cursor = 'pointer';
+        }
         
         btnRow.appendChild(btnDeny);
-        btnRow.appendChild(btnApprove);
+        if (riskData.level !== 'LOW') {
+          btnRow.appendChild(btnApprove);
+        }
         panel.appendChild(btnRow);
         
         shadow.appendChild(highlight);
@@ -579,15 +951,34 @@ async function handleClick(payload) {
         document.body.appendChild(overlayHost);
         
         btnDeny.addEventListener('click', () => {
+          if (isDeniedOrApproved) return;
+          isDeniedOrApproved = true;
+          if (autoApproveInterval) clearInterval(autoApproveInterval);
           overlayHost.remove();
-          res({ action: 'deny' });
+          res({ action: 'deny', risk: riskData.level, decision: 'HUMAN_DENIED' });
         });
         
-        btnApprove.addEventListener('click', () => {
-          overlayHost.remove();
-          target.click();
-          res({ action: 'approve' });
-        });
+        let highRiskConfirmStep = false;
+        
+        if (riskData.level !== 'LOW') {
+          btnApprove.addEventListener('click', () => {
+            if (isDeniedOrApproved) return;
+            
+            if ((riskData.level === 'HIGH' || riskData.level === 'UNKNOWN') && !highRiskConfirmStep) {
+              highRiskConfirmStep = true;
+              if (warningText) {
+                warningText.textContent = '⚠ CONFIRM THIS DANGEROUS ACTION';
+              }
+              return;
+            }
+            
+            isDeniedOrApproved = true;
+            if (autoApproveInterval) clearInterval(autoApproveInterval);
+            overlayHost.remove();
+            target.click();
+            res({ action: 'approve', risk: riskData.level, decision: 'HUMAN_APPROVED' });
+          });
+        }
       });
     }, [selector]).then((injectionResult) => {
       if (!pendingPreviews.has(tabId)) return;
@@ -602,9 +993,17 @@ async function handleClick(payload) {
          return reject(new Error(injectionResult.error));
       }
       if (injectionResult.action === 'deny') {
+         if (activeAction && activeAction.auditRecord) {
+           activeAction.auditRecord.risk = injectionResult.risk || 'UNKNOWN';
+           activeAction.auditRecord.decision = injectionResult.decision || 'HUMAN_DENIED';
+         }
          return resolve({ approved: false, reason: "Human denied the action" });
       }
       if (injectionResult.action === 'approve') {
+         if (activeAction && activeAction.auditRecord) {
+           activeAction.auditRecord.risk = injectionResult.risk || 'UNKNOWN';
+           activeAction.auditRecord.decision = injectionResult.decision || 'HUMAN_APPROVED';
+         }
          return resolve(true);
       }
       return reject(new Error("Unknown preview result"));
@@ -927,6 +1326,17 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.cmd === 'control_action') {
     // Messages from popup are human-initiated
     handleControlAction(msg.action, 'human');
+    sendResponse({ success: true });
+    return false;
+  }
+  
+  if (msg?.cmd === 'getAuditLog') {
+    sendResponse({ auditLog });
+    return false;
+  }
+  
+  if (msg?.cmd === 'clearAuditLog') {
+    clearAuditLog();
     sendResponse({ success: true });
     return false;
   }
