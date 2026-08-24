@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const container = document.getElementById('audit-log-container');
       if (!container) return;
       if (!response || !response.auditLog || response.auditLog.length === 0) {
-        container.innerHTML = '<div style="text-align: center; color: #666; padding: 10px;">No audit records</div>';
+        container.innerHTML = '<div class="audit-empty">No audit records</div>';
         return;
       }
 
@@ -189,15 +189,20 @@ document.addEventListener('DOMContentLoaded', () => {
       response.auditLog.forEach(record => {
         const time = new Date(record.timestamp).toLocaleTimeString([], { hour12: false });
         let div = document.createElement('div');
-        div.style.borderBottom = '1px solid #333';
-        div.style.paddingBottom = '8px';
+        div.className = 'audit-record';
 
-        let html = `<div style="color: #999;">${time}</div>`;
-        html += `<div><strong>${record.action}</strong> &rarr; "${record.target || 'N/A'}"</div>`;
-        html += `<div>Risk: <span style="color: ${record.risk === 'LOW' ? '#17a2b8' : record.risk === 'HIGH' ? '#dc3545' : record.risk === 'MEDIUM' ? '#ffc107' : '#999'}">${record.risk}</span></div>`;
-        html += `<div>Decision: ${record.decision}</div>`;
-        html += `<div>Execution: ${record.execution}</div>`;
-        html += `<div>Outcome: ${record.outcome || 'N/A'}</div>`;
+        let html = `<div style="color: #555;">${time}</div>`;
+        html += `<div style="color: #ccc;"><strong>${record.action}</strong> &rarr; <span style="color: #eee;">"${record.target || 'N/A'}"</span></div>`;
+
+        let riskColor = '#888';
+        if (record.risk === 'LOW') riskColor = '#B6FF00';
+        if (record.risk === 'MEDIUM') riskColor = '#FFA500';
+        if (record.risk === 'HIGH') riskColor = '#FF5555';
+
+        html += `<div style="color: #666;">Risk: <span style="color: ${riskColor};">${record.risk}</span></div>`;
+        html += `<div style="color: #666;">Decision: <span style="color: #aaa;">${record.decision}</span></div>`;
+        html += `<div style="color: #666;">Execution: <span style="color: #aaa;">${record.execution}</span></div>`;
+        html += `<div style="color: #666;">Outcome: <span style="color: #aaa;">${record.outcome || 'N/A'}</span></div>`;
 
         div.innerHTML = html;
         container.appendChild(div);
@@ -245,6 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
     policyTrustedDomains.addEventListener('input', savePolicySettings);
 
     loadPolicySettings();
+    window.refreshPolicyUIInputs = loadPolicySettings;
   }
 
   refreshUIForActiveTab();
@@ -307,13 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   disconnectBtn.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ cmd: 'disconnect' }, (_response) => {
-      chrome.storage.local.remove('connectedTabId', () => {
-        statusText.textContent = 'DISCONNECTED';
-        statusBadge.className = 'connection-status badge-disconnected';
-        refreshUIForActiveTab();
-      });
-    });
+    chrome.runtime.sendMessage({ cmd: 'disconnect' });
   });
 
   function sendControlAction(action) {
@@ -328,6 +328,17 @@ document.addEventListener('DOMContentLoaded', () => {
   btnReturnControl.addEventListener('click', () => sendControlAction('RETURN_CONTROL'));
   btnStop.addEventListener('click', () => sendControlAction('EMERGENCY_STOP'));
   btnReset.addEventListener('click', () => sendControlAction('RESET_STOP'));
+
+  const btnSettings = document.getElementById('btn-settings');
+  if (btnSettings) {
+    btnSettings.addEventListener('click', () => {
+      if (chrome.runtime.openOptionsPage) {
+        chrome.runtime.openOptionsPage();
+      } else {
+        window.open(chrome.runtime.getURL('options.html'));
+      }
+    });
+  }
 
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.status) {
@@ -351,8 +362,13 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.connectedTabId) {
-      refreshUIForActiveTab();
+    if (area === 'local') {
+      if (changes.connectedTabId) {
+        refreshUIForActiveTab();
+      }
+      if (changes.mirailensPolicy && window.refreshPolicyUIInputs) {
+        window.refreshPolicyUIInputs();
+      }
     }
   });
 });

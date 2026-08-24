@@ -179,10 +179,13 @@ async function inspectElementProperties(tabId, selector) {
 }
 
 function initControlState() {
-  chrome.storage.local.get([CONTROL_STATE_KEY, 'isEmergencyStop', 'pausedBy', 'connectedTabId', POLICY_KEY], (data) => {
+  chrome.storage.local.get([CONTROL_STATE_KEY, 'isEmergencyStop', 'pausedBy', 'connectedTabId', POLICY_KEY, 'serverUrl'], (data) => {
     isEmergencyStop = !!data.isEmergencyStop;
     pausedBy = data.pausedBy || null;
     connectedTabId = data.connectedTabId || null;
+    if (data.serverUrl) {
+      serverUrl = data.serverUrl;
+    }
 
     // Load policy
     if (data[POLICY_KEY]) {
@@ -240,6 +243,17 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (changes.pausedBy) {
       pausedBy = changes.pausedBy.newValue || null;
     }
+    if (changes.serverUrl) {
+      const oldUrl = serverUrl;
+      serverUrl = changes.serverUrl.newValue || 'ws://127.0.0.1:29100';
+      if (oldUrl !== serverUrl && ws) {
+        console.log('Server URL changed, reconnecting...');
+        disconnect();
+        setTimeout(() => {
+          connect();
+        }, 100);
+      }
+    }
     if (changes[POLICY_KEY]) {
       const val = changes[POLICY_KEY].newValue;
       if (val) {
@@ -273,9 +287,18 @@ function transitionTo(nextState, source) {
     abortActiveAction(`Execution halted: transitioned to ${nextState}`);
   }
 
-  sendPopupStatus('Connected');
+  const isConnected = ws && ws.readyState === WebSocket.OPEN;
+  sendPopupStatus(isConnected ? 'Connected' : 'Disconnected');
   notifyServerStateChange(nextState);
   return { success: true };
+}
+
+function resetControlStateOnDisconnect() {
+  if (controlState === STATES.IDLE) return;
+  if (controlState === STATES.HUMAN_TAKEOVER || controlState === STATES.HUMAN_CONTROLLED) {
+    transitionTo(STATES.BLOCKED, 'disconnect');
+  }
+  transitionTo(STATES.IDLE, 'disconnect');
 }
 
 function abortActiveAction(reason) {
@@ -385,6 +408,8 @@ let reconnectAttempt = 0;
 let lastErrorMessage = '';
 let serverUrl = 'ws://127.0.0.1:29100';
 let ws = null;
+let intentionalDisconnect = false;
+let connectionGeneration = 0;
 const pendingPreviews = new Map();
 
 // ---------- Chrome API helpers (callback-based, safe in MV3) ----------
@@ -1469,34 +1494,42 @@ function connect() {
       clearTimeout(reconnectTimeoutId);
       reconnectTimeoutId = null;
     }
-    ws = new WebSocket(serverUrl);
+    const myGeneration = ++connectionGeneration;
+    const socket = new WebSocket(serverUrl);
+    ws = socket;
 
-    ws.onopen = () => {
+    socket.onopen = () => {
+      if (connectionGeneration !== myGeneration) return;
       console.log('WebSocket connected to MCP server');
       sendPopupStatus('Connected');
       reconnectAttempt = 0;
       startHeartbeat();
-      ws.send(JSON.stringify({
+      socket.send(JSON.stringify({
         type: 'extension_connected',
-        data: { version: '1.0.0', capabilities: ['navigate', 'click', 'type', 'hover', 'snapshot'] }
+        data: { version: '1.2.0', capabilities: ['navigate', 'click', 'type', 'hover', 'snapshot'] }
       }));
       notifyServerStateChange(controlState);
     };
 
-    ws.onclose = () => {
-      console.log('WebSocket disconnected from MCP server');
+    socket.onclose = (event) => {
+      if (connectionGeneration !== myGeneration) return;
+      console.log(`WebSocket disconnected from MCP server. Code: ${event?.code}, Reason: ${event?.reason}`);
+      lastErrorMessage = (event && event.reason) ? `Disconnected: ${event.reason} (Code: ${event.code})` : `Disconnected (Code: ${event ? event.code : 1005})`;
       sendPopupStatus('Disconnected');
       stopHeartbeat();
-      const attempt = ++reconnectAttempt;
+
+      const isIntentional = intentionalDisconnect;
+      intentionalDisconnect = false;
+
+      if (!isIntentional) {
+        reconnectAttempt++;
+      } else {
+        reconnectAttempt = 0;
+      }
       ws = null;
 
       abortActiveAction("WebSocket disconnected.");
-
-      if (controlState === STATES.AGENT_RUNNING || controlState === STATES.AGENT_RESUMING) {
-        transitionTo(STATES.IDLE, 'disconnect');
-      } else if (controlState === STATES.HUMAN_TAKEOVER) {
-        transitionTo(STATES.HUMAN_CONTROLLED, 'disconnect');
-      }
+      resetControlStateOnDisconnect();
 
       for (const [tabId, pending] of pendingPreviews.entries()) {
         clearTimeout(pending.timeoutId);
@@ -1508,19 +1541,25 @@ function connect() {
       }
       pendingPreviews.clear();
 
-      const delay = Math.min(30000, 1000 * Math.pow(2, attempt));
-      reconnectTimeoutId = setTimeout(() => {
-        if (!ws) connect();
-      }, delay);
+      if (!isIntentional) {
+        const delay = Math.min(30000, 1000 * Math.pow(2, reconnectAttempt));
+        reconnectTimeoutId = setTimeout(() => {
+          if (connectionGeneration === myGeneration) {
+            connect();
+          }
+        }, delay);
+      }
     };
 
-    ws.onerror = (error) => {
+    socket.onerror = (error) => {
+      if (connectionGeneration !== myGeneration) return;
       console.error('WebSocket error:', error);
       lastErrorMessage = String(error?.message || 'WebSocket error');
       sendPopupStatus('WebSocket error');
     };
 
-    ws.onmessage = (event) => {
+    socket.onmessage = (event) => {
+      if (connectionGeneration !== myGeneration) return;
       try {
         const message = JSON.parse(event.data);
         if (message.type === 'heartbeat_pong' || message.result === 'pong') {
@@ -1540,6 +1579,31 @@ function connect() {
     sendPopupStatus('Failed to open WebSocket');
     return false;
   }
+}
+
+function disconnect() {
+  intentionalDisconnect = true;
+  connectionGeneration++;
+
+  if (reconnectTimeoutId) {
+    clearTimeout(reconnectTimeoutId);
+    reconnectTimeoutId = null;
+  }
+
+  if (ws) {
+    try {
+      ws.close();
+    } catch (_) {}
+    ws = null;
+  }
+
+  stopHeartbeat();
+  abortActiveAction("WebSocket disconnected.");
+  resetControlStateOnDisconnect();
+  chrome.storage.local.remove('connectedTabId', () => {});
+  sendPopupStatus('Disconnected');
+
+  intentionalDisconnect = false;
 }
 
 chrome.tabs.onActivated.addListener(async (activeInfo) => {
@@ -1595,14 +1659,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg?.cmd === 'disconnect') {
-    if (ws) {
-      ws.close();
-      ws = null;
-    }
-    if (reconnectTimeoutId) {
-      clearTimeout(reconnectTimeoutId);
-      reconnectTimeoutId = null;
-    }
+    disconnect();
     sendResponse({ success: true });
     return false;
   }
@@ -1630,46 +1687,25 @@ chrome.commands?.onCommand?.addListener((command) => {
   if (command === 'connect') {
     connect();
   } else if (command === 'disconnect') {
-    if (ws) {
-      ws.close();
-      ws = null;
-      sendPopupStatus('Disconnected');
-    }
+    disconnect();
   }
 });
 
 chrome.windows.onRemoved.addListener(async () => {
   const windows = await windowsGetAll();
-  if (windows.length === 0 && ws) {
-    try { ws.close(); } catch (_) {}
-    ws = null;
-    sendPopupStatus('Disconnected');
-    try { chrome.storage.local.remove('connectedTabId'); } catch (_) {}
+  if (windows.length === 0) {
+    disconnect();
   }
 });
 
 chrome.runtime.onStartup?.addListener(() => {
-  try { chrome.storage.local.remove('connectedTabId'); } catch (_) {}
-  if (ws) {
-    try { ws.close(); } catch (_) {}
-    ws = null;
-  }
-  sendPopupStatus('Disconnected');
+  disconnect();
 });
 
 chrome.runtime.onInstalled?.addListener(() => {
-  try { chrome.storage.local.remove('connectedTabId'); } catch (_) {}
-  if (ws) {
-    try { ws.close(); } catch (_) {}
-    ws = null;
-  }
-  sendPopupStatus('Disconnected');
+  disconnect();
 });
 
 chrome.runtime.onSuspend?.addListener(() => {
-  try { chrome.storage.local.remove('connectedTabId'); } catch (_) {}
-  if (ws) {
-    try { ws.close(); } catch (_) {}
-    ws = null;
-  }
+  disconnect();
 });

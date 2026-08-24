@@ -740,3 +740,121 @@ test('Closing connected tab clears connectedTabId and aborts pending actions', a
     await instance.cleanup();
   }
 });
+
+test('Explicit disconnect prevents reconnect and resets control state to IDLE', async () => {
+  const instance = loadBackground();
+  try {
+    // 1. Connect
+    await instance.connect();
+    await new Promise(resolve => nativeSetTimeout(resolve, 10));
+
+    // Verify CONNECTED
+    let status = await instance.getStatus();
+    assert.strictEqual(status.status, 'connected');
+
+    // 2. Put controlState to HUMAN_CONTROLLED
+    await instance.sendPopupControl('TAKE_CONTROL');
+    status = await instance.getStatus();
+    assert.strictEqual(status.controlState, 'HUMAN_CONTROLLED');
+
+    // 3. Disconnect
+    await new Promise(resolve => {
+      instance.chromeListeners.message[0]({ cmd: 'disconnect' }, {}, resolve);
+    });
+    await new Promise(resolve => nativeSetTimeout(resolve, 10));
+
+    // Verify DISCONNECTED and controlState reset to IDLE
+    status = await instance.getStatus();
+    assert.strictEqual(status.status, 'disconnected');
+    assert.strictEqual(status.controlState, 'IDLE');
+
+    // 4. Wait to ensure no auto-reconnect happens
+    await new Promise(resolve => nativeSetTimeout(resolve, 100));
+    status = await instance.getStatus();
+    assert.strictEqual(status.status, 'disconnected');
+  } finally {
+    await instance.cleanup();
+  }
+});
+
+test('Stale WebSocket callbacks are ignored via connection generation', async () => {
+  const instance = loadBackground();
+  try {
+    // 1. Connect
+    await instance.connect();
+    await new Promise(resolve => nativeSetTimeout(resolve, 10));
+
+    const oldWs = instance.getWsInstance();
+    assert.ok(oldWs);
+
+    // 2. Disconnect
+    await new Promise(resolve => {
+      instance.chromeListeners.message[0]({ cmd: 'disconnect' }, {}, resolve);
+    });
+    await new Promise(resolve => nativeSetTimeout(resolve, 10));
+
+    // 3. Simulate stale socket triggering onopen or onclose
+    let status = await instance.getStatus();
+    assert.strictEqual(status.status, 'disconnected');
+
+    // If the old WS triggers open, it must NOT connect
+    if (oldWs.onopen) {
+      oldWs.onopen();
+    }
+    status = await instance.getStatus();
+    assert.strictEqual(status.status, 'disconnected');
+
+    // If the old WS triggers close, it must NOT start reconnect timer
+    if (oldWs.onclose) {
+      oldWs.onclose();
+    }
+    await new Promise(resolve => nativeSetTimeout(resolve, 100));
+    status = await instance.getStatus();
+    assert.strictEqual(status.status, 'disconnected');
+  } finally {
+    await instance.cleanup();
+  }
+});
+
+test('Reopening popup / getStatus query does not automatically reconnect', async () => {
+  const instance = loadBackground();
+  try {
+    let status = await instance.getStatus();
+    assert.strictEqual(status.status, 'disconnected');
+
+    // Query status multiple times simulating popup opening/closing
+    status = await instance.getStatus();
+    assert.strictEqual(status.status, 'disconnected');
+
+    await new Promise(resolve => nativeSetTimeout(resolve, 50));
+    status = await instance.getStatus();
+    assert.strictEqual(status.status, 'disconnected');
+  } finally {
+    await instance.cleanup();
+  }
+});
+
+test('Manual reconnect after explicit disconnect works successfully', async () => {
+  const instance = loadBackground();
+  try {
+    await instance.connect();
+    await new Promise(resolve => nativeSetTimeout(resolve, 10));
+    let status = await instance.getStatus();
+    assert.strictEqual(status.status, 'connected');
+
+    // Disconnect
+    await new Promise(resolve => {
+      instance.chromeListeners.message[0]({ cmd: 'disconnect' }, {}, resolve);
+    });
+    status = await instance.getStatus();
+    assert.strictEqual(status.status, 'disconnected');
+
+    // Connect manually again
+    await instance.connect();
+    await new Promise(resolve => nativeSetTimeout(resolve, 10));
+    status = await instance.getStatus();
+    assert.strictEqual(status.status, 'connected');
+  } finally {
+    await instance.cleanup();
+  }
+});
