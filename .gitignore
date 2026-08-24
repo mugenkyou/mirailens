@@ -34,3 +34,6 @@ yarn-error.log*
 # Misc
 .DS_Store
 *.pem
+*.tgz
+*.zip
+scratch/test-install/
