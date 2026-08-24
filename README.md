@@ -1,120 +1,178 @@
 # <img src="https://mirailens.vercel.app/logo/favicon-32x32.png" width="28" height="28" align="center" alt="MiraiLens Logo"> MiraiLens
 
-### The browser agent you can watch, interrupt, control, and trust.
+### The browser control layer for AI agents.
 
 [![npm version](https://img.shields.io/npm/v/mirailens.svg)](https://www.npmjs.com/package/mirailens)
 [![License: Custom](https://img.shields.io/badge/License-Community%20Non--Commercial-blue.svg)](LICENSE)
 [![CI Status](https://github.com/mugenkyou/mcp-server-mirailens/actions/workflows/ci.yml/badge.svg)](https://github.com/mugenkyou/mcp-server-mirailens/actions/workflows/ci.yml)
-[![Protocol Version](https://img.shields.io/badge/Protocol-1.0-orange.svg)](#protocol-compatibility-policy)
-
-[Website](https://mirailens.io) | [Documentation](https://github.com/mugenkyou/mcp-server-mirailens#readme) | [Security](SECURITY.md) | [Architecture](docs/architecture.md) | [Developers](CONTRIBUTING.md) | [GitHub](https://github.com/mugenkyou/mcp-server-mirailens) | [npm](https://www.npmjs.com/package/mirailens)
+[![Protocol Version](https://img.shields.io/badge/Protocol-1.0-orange.svg)](#protocol-compatibility)
 
 ---
 
-## What is MiraiLens?
+## Resources
 
-Unrestricted browser agents present massive security challenges. When an AI agent runs browser automation directly on your system, it is difficult to audit what the agent is doing in real-time, interrupt unsafe operations, or enforce security policies independently of the model itself.
+- **Website**: [mirailens.vercel.app](https://mirailens.vercel.app)
+- **Chrome Extension**: [MiraiLens Connector on Chrome Web Store](https://chromewebstore.google.com/detail/cjkgpjbjjefoecfbiehiognojjdhofmg)
+- **npm Package**: [npm/mirailens](https://www.npmjs.com/package/mirailens)
+- **GitHub Repository**: [mugenkyou/mcp-server-mirailens](https://github.com/mugenkyou/mcp-server-mirailens)
+- **Security Policy**: [SECURITY.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/SECURITY.md)
+- **Threat Model**: [threat_model.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/threat_model.md)
+- **Architecture Details**: [docs/architecture.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/docs/architecture.md)
+- **Contributing Guide**: [CONTRIBUTING.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/CONTRIBUTING.md)
 
-**MiraiLens** solves this problem by placing a secure browser extension between the AI client and your browser session. The extension observes proposed actions, applies local client-side policy rules, captures confirmation overlays, verifies outcomes, and logs accountability records locally.
+---
+
+## Why MiraiLens?
+
+Browser agents can perform powerful actions on behalf of users, but direct, unrestricted AI browser control creates a security and accountability problem.
+
+The key question is: **"Who is actually in control when the AI starts acting?"**
+
+MiraiLens introduces a separate browser-side control layer between the AI client and your browser session. The AI can propose and execute actions only under the supervision of a local client-side state machine.
+
+```text
+   AI Agent
+      |
+      | MCP (JSON-RPC)
+      v
+   MiraiLens MCP Server
+      |
+      | Local WebSocket
+      v
+   MiraiLens Connector (Chrome Extension)
+      |
+      +-- Policy checks (Blocked domains, Sensitive fields)
+      +-- Human control (Approve / Deny, Pause, Emergency Stop)
+      +-- Verification (Verify DOM status & URL redirections)
+      +-- Accountability (Append-only local ledger)
+      |
+      v
+   Active Browser Tab
+```
 
 ---
 
 ## Key Capabilities
 
 ### Browser Control
-Allows the AI client to navigate tabs, click elements, hover, type text, choose dropdown options, press keys, and inspect DOM structures.
+Provides the AI client with rich, granular automation tools:
+- Navigate tabs, go back, and go forward.
+- Click elements and hover.
+- Type text inputs and select dropdown options.
+- Press keyboard keys and sleep/wait.
+- Capture accessibility ARIA tree snapshots, console logs, and screenshots.
 
 ### Human Control
-Provides interactive controls to pause operations, take manual control, trigger emergency stops, and approve or deny actions directly inside the tab.
+Enables real-time human intervention over active AI runs:
+- Pause and resume AI executions.
+- Take manual control of the browser at any time.
+- Trigger an emergency stop to immediately block active operations.
+- Explicitly approve or deny actions using visual confirmation overlays on the active page.
 
-### Extension-Enforced Policy
-Gated actions (trusted domains, blocked domains, and draft-only mode overrides) are evaluated directly inside the browser extension, isolating execution rules from the untrusted server.
+### Browser-Side Policy Enforcement
+Critical security constraints are evaluated inside the browser extension, isolating enforcement rules from the untrusted server and client:
+- **Blocked Domains**: Actions on configured blocked domains are immediately denied.
+- **Sensitive Fields**: Passwords, PINs, CVVs, and payment forms automatically trigger policy blocks or human overlays.
+- **Draft-Only Mode**: Prevents form submissions while allowing inputs to be filled for drafting.
+
+### Verification
+The extension inspects the target tab's post-action state (verifying changes to element values or URL redirects) and records outcome results as:
+- `VERIFIED`: Target condition succeeded.
+- `FAILED`: Action failed or did not achieve expected state.
+- `UNVERIFIED_COMPLETE`: Action ran but state could not be programmatically evaluated.
 
 ### Accountability
-Every proposed action, user decision, and execution status is recorded locally inside a bounded, append-only execution ledger.
+Logs execution events in a local, sandboxed, append-only ledger stored in extension storage (`chrome.storage.local`). The ledger tracks:
+- Proposed actions and target selectors.
+- Actor information (`AI` vs `HUMAN`).
+- Human decisions (approved/denied).
+- Execution timestamps, state transitions, and verification outcomes.
+- Values entered in sensitive fields are automatically masked/redacted before writing to the ledger.
 
-### Verification & Recovery
-Enables post-action status verification (validating form fields and redirect destinations) with targeted, origin-bound recovery snapshots to undo text input changes.
-
-### MCP Integration
-Fully compatible with the Model Context Protocol (MCP), enabling seamless connections to orchestration clients (like Cursor or Claude Desktop) via a local Node server.
-
----
-
-> [!IMPORTANT]
-> **Security Policy & Threat Model**
-> MiraiLens does not claim to solve prompt injection. The browser extension enforces strict policy boundaries on requested browser actions, but it cannot prevent an AI model from being manipulated into requesting a harmful action. Users must remain vigilant when approving actions.
-> For details, read our [Threat Model](threat_model.md) and [Security Policy](SECURITY.md).
+### Recovery
+Supports targeted, origin-bound recovery for text input value changes. Snapshots are restricted to non-sensitive fields and expire immediately if the tab URL redirects, navigates, or is closed.
 
 ---
 
-## Technical Architecture
+## Security Model
+
+> **AI can act. You remain in control.**
+
+MiraiLens does **NOT** claim to solve prompt injection. A malicious webpage or injection payload can still manipulate an AI client into requesting a harmful action. Instead, MiraiLens provides an independent browser-side control boundary around the requested action, ensuring no operation runs without human verification or policy matches.
 
 ```text
-  +------------+       Model Context Protocol (JSON-RPC)       +------------+
-  |    MCP     | <-------------------------------------------> |    MCP     |
-  | Orchestrator |                                             |   Server   |
-  +------------+                                               +------------+
-                                                                     |
-                                                           WebSocket | (JSON-RPC)
-                                                                     v
-  +------------------+     Content Script Overlay     +---------------------+
-  |   Active Web     | <----------------------------- |  Browser Extension  |
-  |   Tab Overlay    |                                |   (Service Worker)  |
-  +------------------+                                +---------------------+
+    Prompt Injection
+          |
+          v
+    AI Requests Action
+          |
+          v
+    MiraiLens Policy / Control Layer
+          |
+          +----> BLOCK (Domain/Sensitive rule matches)
+          |
+          +----> ASK HUMAN (Interactive Shadow DOM confirmation overlay)
+          |
+          +----> EXECUTE
+                   |
+                   v
+                VERIFY (Inspect DOM and active URL)
+                   |
+                   v
+              RECORD RESULT (Write to sandboxed local ledger)
 ```
 
-- **MCP Client**: Decides goals and proposes browser actions.
-- **MCP Server**: Translates standard MCP JSON-RPC requests into WebSocket command packages.
-- **Browser Extension**: Hosts the state machine, evaluates policy, and serves as the trusted client-side enforcement boundary.
-- **Active Browser Tab**: Renders the Shadow DOM visual approval overlays to receive trusted human input.
-- **Local Ledger**: Saves secure session audits inside browser extension sandbox storage.
-
-For detailed boundary models, view the [Architecture Guide](docs/architecture.md).
+For more information, please read the [threat_model.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/threat_model.md) and [SECURITY.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/SECURITY.md) guidelines.
 
 ---
 
 ## Installation
 
-### 1. Run the MCP Server
-
-Start the local stdio MCP server process via `npx`:
+The npm package provides the local MiraiLens MCP server. Start the server directly via `npx`:
 
 ```bash
 npx mirailens@latest
 ```
 
-### 2. Load the Chrome Extension
+Alternatively, install it locally:
 
-1. Clone this repository locally:
-   ```bash
-   git clone https://github.com/mugenkyou/mcp-server-mirailens.git
-   ```
-2. Navigate your browser to `chrome://extensions/` and toggle **Developer mode** (top right).
-3. Click **Load unpacked** (top left) and select the repository's `extension` directory.
-4. Confirm the extension has loaded and displays version `v1.2.0`.
+```bash
+npm install -g mirailens
+```
+
+---
+
+## Chrome Extension
+
+The **MiraiLens Connector** bridges the MCP server to your active browser environment.
+
+1. Install the [MiraiLens Connector](https://chromewebstore.google.com/detail/cjkgpjbjjefoecfbiehiognojjdhofmg) from the Chrome Web Store.
+2. Start the MiraiLens MCP Server using `npx`.
+3. Configure your favorite MCP client (see below).
+4. Click the extension icon and select **CONNECT TO MCP SERVER**.
+
+*Note: For extension development, you can clone the repository and load the `extension` folder as an unpacked extension in `chrome://extensions/`.*
 
 ---
 
 ## MCP Client Configuration
 
-### Cursor Preset
-Add the following block to your Cursor `mcp.json` settings:
+### Cursor
+Add the following config to your Cursor `mcp.json` parameters:
 
 ```json
 {
   "mcpServers": {
     "mirailens": {
       "command": "npx",
-      "args": ["-y", "mirailens@latest"],
-      "env": {}
+      "args": ["-y", "mirailens@latest"]
     }
   }
 }
 ```
 
-### Claude Desktop Preset
-Add the following block to your `claude_desktop_config.json` settings:
+### Claude Desktop
+Add the following to your `claude_desktop_config.json`:
 
 ```json
 {
@@ -129,40 +187,98 @@ Add the following block to your `claude_desktop_config.json` settings:
 
 ---
 
-## Browser Extension Options & Permissions
+## Technical Architecture
 
-The browser extension relies on standard permissions to manage automation safety:
-- **`scripting`**: Injects page automation controls and retrieves accessibility nodes.
-- **`tabs` / `activeTab`**: Obtains active tab hostnames to check policy matches and redirect targets.
-- **`storage`**: Persists Trusted/Blocked domain lists and the append-only action ledger.
-- **`<all_urls>` host permissions**: Permits execution on page origins targeted by automation tasks.
+```text
+    +--------------+       Model Context Protocol (JSON-RPC)       +---------------+
+    |  MCP Client  | <-------------------------------------------> |  MCP Server   |
+    | (Proposer)   |                                               | (Translator)  |
+    +--------------+                                               +---------------+
+                                                                           |
+                                                                 WebSocket | (JSON-RPC)
+                                                                           v
+    +--------------+            Chrome Message Passing             +---------------+
+    |  Browser     | <-------------------------------------------- |  Extension    |
+    |  Tab DOM     |                                               |  Service      |
+    +--------------+                                               |  Worker       |
+                                                                   |  (Enforcer)   |
+                                                                   +---------------+
+```
+
+- **MCP Client**: Evaluates goals and proposes browser actions.
+- **MCP Server**: Coordinates stdio streams and translates requests into local WebSocket messages.
+- **Browser Extension**:authoritative client-side security authority; evaluates policies, prompts for confirmation, verifies states, and records audits.
+- **Browser Tab DOM**: Executes supported automation scripts and renders confirmation overlays.
+
+For structural details, see [docs/architecture.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/docs/architecture.md).
 
 ---
 
 ## Supported Clients & Browsers
 
-### MCP Clients
-- **Cursor**: Fully supported (v0.40.4+).
-- **Claude Desktop**: Fully supported (v0.7.0+).
-- **MCP Inspector**: Fully supported (v0.1.0+).
+### Known Integrations
+- **Cursor** (v0.40.4+)
+- **Claude Desktop** (v0.7.0+)
+- **MCP Inspector** (v0.1.0+)
 
 ### Web Browsers
-- **Google Chrome / Chromium**: Fully supported (Recommended).
-- **Microsoft Edge**: Fully supported.
-- **Mozilla Firefox**: Not supported (incompatible scripting execution models).
-
-### Protocol Compatibility Policy
-- The server protocol is frozen at version **v1.0**.
-- Future patches in the v1.2.x series will maintain backward compatibility with all v1.0 clients.
+- **Google Chrome / Chromium**: Fully Supported (Recommended).
+- **Microsoft Edge**: Fully Supported.
+- **Mozilla Firefox**: Not currently supported (extension relies on Chromium-specific MV3 scripting namespace APIs).
 
 ---
 
-## Contributing & Development
+## Protocol Compatibility
 
-For setup parameters, branch conventions, and testing commands, please read our [Contributing Guide](CONTRIBUTING.md) and [Changelog](CHANGELOG.md).
+The server communication protocol is frozen at version **v1.0**. All future patch releases in the v1.2.x series will maintain backward compatibility with v1.0 clients.
+
+---
+
+## Development
+
+```bash
+# Clone the repository
+git clone https://github.com/mugenkyou/mcp-server-mirailens.git
+cd mcp-server-mirailens
+
+# Clean dependency installation
+npm ci
+
+# Perform type checks
+npm run typecheck
+
+# Build the server target
+npm run build
+
+# Run the test runner
+npm test
+
+# Dry-run package inspection
+npm pack --dry-run
+```
+
+---
+
+## Contributing
+
+For coding conventions and pull request rules, see [CONTRIBUTING.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/CONTRIBUTING.md). Security issues must be reported privately following [SECURITY.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/SECURITY.md).
 
 ---
 
 ## License
 
-Distributed under the **MiraiLens Community Non-Commercial License (Version 1.0)**. See the [LICENSE](LICENSE) file for details.
+Distributed under the **MiraiLens Community Non-Commercial License, Version 1.0**. See the [LICENSE](LICENSE) file for details.
+
+---
+
+<p align="center">
+  <strong>MiraiLens</strong><br>
+  <em>"Watch it. Interrupt it. Control it. Trust it."</em>
+</p>
+
+<p align="center">
+  <a href="https://mirailens.vercel.app">Website</a> |
+  <a href="https://chromewebstore.google.com/detail/cjkgpjbjjefoecfbiehiognojjdhofmg">Chrome Extension</a> |
+  <a href="https://www.npmjs.com/package/mirailens">npm</a> |
+  <a href="https://github.com/mugenkyou/mcp-server-mirailens">GitHub</a>
+</p>
