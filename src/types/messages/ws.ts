@@ -26,6 +26,13 @@ export interface SocketMessageMap {
     addBlockedDomain?: string;
     removeBlockedDomain?: string;
   };
+  undo_last: {};
+  get_action_history: {
+    sessionId?: string;
+    actor?: 'AI' | 'HUMAN';
+    domain?: string;
+    limit?: number;
+  };
 }
 
 export type MessageType<T> = keyof T;
