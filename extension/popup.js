@@ -6,7 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusBadge = document.getElementById('status-badge');
   const statusText = document.getElementById('status-text');
   const lastErrorDiv = document.getElementById('last-error');
-  
+
   // Control Panel Elements
   const controlPanel = document.getElementById('control-panel');
   const aiStatusBadge = document.getElementById('ai-status-badge');
@@ -21,7 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function updateControlPanel(state) {
     if (!state) return;
-    
+
     // Reset buttons visibility
     btnPause.classList.add('hidden');
     btnResume.classList.add('hidden');
@@ -95,7 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function refreshUIForActiveTab() {
     chrome.runtime.sendMessage({ cmd: 'getStatus' }, (statusResponse) => {
       const isServerConnected = Boolean(statusResponse && statusResponse.status === 'connected');
-      
+
       // Update top-level connection badge
       if (isServerConnected) {
         statusBadge.className = 'connection-status badge-connected';
@@ -155,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
             connectTabBtn.classList.add('hidden');
             focusTabBtn.classList.add('hidden');
             disconnectBtn.classList.toggle('hidden', !hasConnectedTab);
-            
+
             if (isServerConnected) {
               statusText.textContent = 'ACTIVE ON THIS TAB';
               statusBadge.className = 'connection-status badge-connected';
@@ -184,29 +184,72 @@ document.addEventListener('DOMContentLoaded', () => {
         container.innerHTML = '<div style="text-align: center; color: #666; padding: 10px;">No audit records</div>';
         return;
       }
-      
+
       container.innerHTML = '';
       response.auditLog.forEach(record => {
         const time = new Date(record.timestamp).toLocaleTimeString([], { hour12: false });
         let div = document.createElement('div');
         div.style.borderBottom = '1px solid #333';
         div.style.paddingBottom = '8px';
-        
+
         let html = `<div style="color: #999;">${time}</div>`;
         html += `<div><strong>${record.action}</strong> &rarr; "${record.target || 'N/A'}"</div>`;
         html += `<div>Risk: <span style="color: ${record.risk === 'LOW' ? '#17a2b8' : record.risk === 'HIGH' ? '#dc3545' : record.risk === 'MEDIUM' ? '#ffc107' : '#999'}">${record.risk}</span></div>`;
         html += `<div>Decision: ${record.decision}</div>`;
         html += `<div>Execution: ${record.execution}</div>`;
         html += `<div>Outcome: ${record.outcome || 'N/A'}</div>`;
-        
+
         div.innerHTML = html;
         container.appendChild(div);
       });
     });
   }
 
+  function initPolicyUI() {
+    const policyDraftOnly = document.getElementById('policy-draft-only');
+    const policySensitiveFields = document.getElementById('policy-sensitive-fields');
+    const policyBlockedDomains = document.getElementById('policy-blocked-domains');
+    const policyTrustedDomains = document.getElementById('policy-trusted-domains');
+
+    if (!policyDraftOnly || !policySensitiveFields || !policyBlockedDomains || !policyTrustedDomains) return;
+
+    function loadPolicySettings() {
+      chrome.storage.local.get('mirailensPolicy', (data) => {
+        const policy = data.mirailensPolicy || {
+          draftOnly: false,
+          trustedDomains: ['localhost', '127.0.0.1'],
+          blockedDomains: ['attacker.com', 'evil.com'],
+          sensitiveFieldDecision: 'ALWAYS_ASK'
+        };
+
+        policyDraftOnly.checked = !!policy.draftOnly;
+        policySensitiveFields.value = policy.sensitiveFieldDecision || 'ALWAYS_ASK';
+        policyBlockedDomains.value = (policy.blockedDomains || []).join(', ');
+        policyTrustedDomains.value = (policy.trustedDomains || []).join(', ');
+      });
+    }
+
+    function savePolicySettings() {
+      const policy = {
+        draftOnly: policyDraftOnly.checked,
+        sensitiveFieldDecision: policySensitiveFields.value,
+        blockedDomains: policyBlockedDomains.value.split(',').map(s => s.trim()).filter(Boolean),
+        trustedDomains: policyTrustedDomains.value.split(',').map(s => s.trim()).filter(Boolean)
+      };
+      chrome.storage.local.set({ mirailensPolicy: policy });
+    }
+
+    policyDraftOnly.addEventListener('change', savePolicySettings);
+    policySensitiveFields.addEventListener('change', savePolicySettings);
+    policyBlockedDomains.addEventListener('input', savePolicySettings);
+    policyTrustedDomains.addEventListener('input', savePolicySettings);
+
+    loadPolicySettings();
+  }
+
   refreshUIForActiveTab();
   refreshAuditLog();
+  initPolicyUI();
 
   const btnClearAudit = document.getElementById('btn-clear-audit');
   if (btnClearAudit) {

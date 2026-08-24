@@ -151,3 +151,34 @@ export const get_control_state: Tool = {
     };
   },
 };
+
+export const get_policy: Tool = {
+  schema: baseControlSchema("get_policy", "Get the current extension-authoritative security policy settings."),
+  handle: async (context) => {
+    const response = await context.sendSocketMessage("get_policy", {});
+    return {
+      content: [{ type: "text", text: JSON.stringify(response.policy, null, 2) }],
+    };
+  }
+};
+
+export const set_policy: Tool = {
+  schema: {
+    name: "set_policy",
+    description: "Request the extension to update policy settings. Note: This requires physical human approval on the browser tab overlay and cannot be done silently.",
+    inputSchema: zodToJsonSchema(z.object({
+      draftOnly: z.boolean().optional(),
+      sensitiveFieldDecision: z.enum(["ALWAYS_ASK", "ALWAYS_DENY"]).optional(),
+      addTrustedDomain: z.string().optional(),
+      removeTrustedDomain: z.string().optional(),
+      addBlockedDomain: z.string().optional(),
+      removeBlockedDomain: z.string().optional(),
+    })),
+  },
+  handle: async (context, args) => {
+    const response = await context.sendSocketMessage("set_policy", (args || {}) as any);
+    return {
+      content: [{ type: "text", text: JSON.stringify(response, null, 2) }],
+    };
+  }
+};
