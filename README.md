@@ -1,25 +1,54 @@
-# MiraiLens — MCP Browser Agent
+# <img src="https://mirailens.vercel.app/logo/favicon-32x32.png" width="28" height="28" align="center" alt="MiraiLens Logo"> MiraiLens
 
-MiraiLens is the browser agent you can watch, interrupt, control, and trust. It implements the Model Context Protocol (MCP) to bridge the gap between advanced AI orchestrators and your browser, allowing AI assistants to execute operations on your active browser session under strict, client-side safety policies.
+### The browser agent you can watch, interrupt, control, and trust.
 
----
+[![npm version](https://img.shields.io/npm/v/mirailens.svg)](https://www.npmjs.com/package/mirailens)
+[![License: Custom](https://img.shields.io/badge/License-Community%20Non--Commercial-blue.svg)](LICENSE)
+[![CI Status](https://github.com/mugenkyou/mcp-server-mirailens/actions/workflows/ci.yml/badge.svg)](https://github.com/mugenkyou/mcp-server-mirailens/actions/workflows/ci.yml)
+[![Protocol Version](https://img.shields.io/badge/Protocol-1.0-orange.svg)](#protocol-compatibility-policy)
 
-## Why MiraiLens
-
-Web automation powered by AI assistants carries significant security risks. MiraiLens provides browser protection:
-
-- **Browser Control**: Enables AI to execute high‑level clicks, input values, dropdown selection, navigation, and keyboard inputs on your active browser tab.
-- **Observability**: Exposes detailed visual and structural state inspection (such as screenshots, console log feeds, and ARIA accessibility tree snapshots) to the AI client.
-- **Human Approval**: Every consequential browser action (clicks, values, external navigation) requires physical human approval on the browser tab overlay.
-- **Extension-side Policy Enforcement**: Enforces security constraints (Trusted Domains, Blocked Domains, and Draft-Only mode) inside the browser context, ensuring the AI cannot bypass policies or run actions silently.
-- **Accountability**: Generates an append‑only local execution ledger tracking sessions, actors, actions, decisions, and outcome statuses.
-- **Recovery (Undo)**: Supports targeted rollback snapshots for form input values to easily restore previous states without full-page reloads.
+[Website](https://mirailens.io) | [Documentation](https://github.com/mugenkyou/mcp-server-mirailens#readme) | [Security](SECURITY.md) | [Architecture](docs/architecture.md) | [Developers](CONTRIBUTING.md) | [GitHub](https://github.com/mugenkyou/mcp-server-mirailens) | [npm](https://www.npmjs.com/package/mirailens)
 
 ---
 
-## Architecture
+## What is MiraiLens?
 
-MiraiLens uses a three-tier design to keep security enforcement on the user's client side:
+Unrestricted browser agents present massive security challenges. When an AI agent runs browser automation directly on your system, it is difficult to audit what the agent is doing in real-time, interrupt unsafe operations, or enforce security policies independently of the model itself.
+
+**MiraiLens** solves this problem by placing a secure browser extension between the AI client and your browser session. The extension observes proposed actions, applies local client-side policy rules, captures confirmation overlays, verifies outcomes, and logs accountability records locally.
+
+---
+
+## Key Capabilities
+
+### Browser Control
+Allows the AI client to navigate tabs, click elements, hover, type text, choose dropdown options, press keys, and inspect DOM structures.
+
+### Human Control
+Provides interactive controls to pause operations, take manual control, trigger emergency stops, and approve or deny actions directly inside the tab.
+
+### Extension-Enforced Policy
+Gated actions (trusted domains, blocked domains, and draft-only mode overrides) are evaluated directly inside the browser extension, isolating execution rules from the untrusted server.
+
+### Accountability
+Every proposed action, user decision, and execution status is recorded locally inside a bounded, append-only execution ledger.
+
+### Verification & Recovery
+Enables post-action status verification (validating form fields and redirect destinations) with targeted, origin-bound recovery snapshots to undo text input changes.
+
+### MCP Integration
+Fully compatible with the Model Context Protocol (MCP), enabling seamless connections to orchestration clients (like Cursor or Claude Desktop) via a local Node server.
+
+---
+
+> [!IMPORTANT]
+> **Security Policy & Threat Model**
+> MiraiLens does not claim to solve prompt injection. The browser extension enforces strict policy boundaries on requested browser actions, but it cannot prevent an AI model from being manipulated into requesting a harmful action. Users must remain vigilant when approving actions.
+> For details, read our [Threat Model](threat_model.md) and [Security Policy](SECURITY.md).
+
+---
+
+## Technical Architecture
 
 ```text
   +------------+       Model Context Protocol (JSON-RPC)       +------------+
@@ -35,77 +64,42 @@ MiraiLens uses a three-tier design to keep security enforcement on the user's cl
   +------------------+                                +---------------------+
 ```
 
-For more details, see the [Architecture Guide](docs/architecture.md).
+- **MCP Client**: Decides goals and proposes browser actions.
+- **MCP Server**: Translates standard MCP JSON-RPC requests into WebSocket command packages.
+- **Browser Extension**: Hosts the state machine, evaluates policy, and serves as the trusted client-side enforcement boundary.
+- **Active Browser Tab**: Renders the Shadow DOM visual approval overlays to receive trusted human input.
+- **Local Ledger**: Saves secure session audits inside browser extension sandbox storage.
 
----
-
-## Requirements
-
-- **Node.js**: Version 18.0.0 or higher.
-- **Browser**: Google Chrome, Chromium, or Microsoft Edge.
-- **MCP Client**: Cursor, Claude Desktop, or Model Context Protocol Inspector.
-- **Extension Mode**: Developer mode enabled in browser to load extension unpacked.
+For detailed boundary models, view the [Architecture Guide](docs/architecture.md).
 
 ---
 
 ## Installation
 
-### 1. Install & Run MCP Server
+### 1. Run the MCP Server
 
-To run the MCP server, simply use `npx`:
+Start the local stdio MCP server process via `npx`:
 
 ```bash
 npx mirailens@latest
 ```
 
-This will launch the Model Context Protocol stdio server on your local machine, listening for incoming stdio streams from your MCP client.
+### 2. Load the Chrome Extension
 
-### 2. Install Browser Extension
-
-1. Clone this repository locally if you haven't already:
+1. Clone this repository locally:
    ```bash
    git clone https://github.com/mugenkyou/mcp-server-mirailens.git
    ```
-2. Open your browser and navigate to the Extensions page: `chrome://extensions/`
-3. Toggle the **Developer mode** switch in the top right.
-4. Click **Load unpacked** in the top left.
-5. Select the `extension` folder inside the cloned repository.
-6. Note the extension ID and confirm the version is showing `v1.2.0`.
+2. Navigate your browser to `chrome://extensions/` and toggle **Developer mode** (top right).
+3. Click **Load unpacked** (top left) and select the repository's `extension` directory.
+4. Confirm the extension has loaded and displays version `v1.2.0`.
 
 ---
 
-## Browser Extension Configuration
+## MCP Client Configuration
 
-The MiraiLens extension handles the ultimate enforcement authority:
-- **Permissions Required**:
-  - `scripting`: Required to inject selectors, retrieve element states, and automate input filling inside target web frames.
-  - `tabs` & `activeTab`: Used to query tab URLs, focus active windows, and verify page navigation outcomes.
-  - `storage`: Required to maintain policy settings and save the audit ledger list locally.
-  - `windows` & `alarms`: Used to handle background connection lifecycles and reconnect timers.
-  - `<all_urls>` Host Permission: Needed to interact with arbitrary target pages selected by the orchestrator.
-
----
-
-## First Run
-
-1. Start your local MCP Client (Cursor or Claude Desktop).
-2. Click the **MiraiLens** extension icon in your browser toolbar to open the console popup.
-3. Click **CONNECT TO MCP SERVER**.
-4. Navigate your active tab to a page (e.g. `http://localhost:3000` or a public domain).
-5. Request your AI assistant to click an element or type text in the active window.
-6. The action overlay will highlight the element and present Approve/Deny buttons. Confirm the action to execute.
-
----
-
-## MCP Client Configuration Examples
-
-### Cursor Configuration
-
-Open your Cursor configuration file (`mcp.json`):
-
-- **Windows**: `%APPDATA%/Cursor/User/globalStorage/cursor.mcp/mcp.json`
-- **macOS**: `~/Library/Application Support/Cursor/User/globalStorage/cursor.mcp/mcp.json`
-- **Linux**: `~/.config/Cursor/User/globalStorage/cursor.mcp/mcp.json`
+### Cursor Preset
+Add the following block to your Cursor `mcp.json` settings:
 
 ```json
 {
@@ -119,12 +113,8 @@ Open your Cursor configuration file (`mcp.json`):
 }
 ```
 
-### Claude Desktop Configuration
-
-Open Claude Desktop's configuration file (`claude_desktop_config.json`):
-
-- **Windows**: `%APPDATA%/Claude/claude_desktop_config.json`
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+### Claude Desktop Preset
+Add the following block to your `claude_desktop_config.json` settings:
 
 ```json
 {
@@ -139,94 +129,37 @@ Open Claude Desktop's configuration file (`claude_desktop_config.json`):
 
 ---
 
-## Available Tools
+## Browser Extension Options & Permissions
 
-- **mcp_mirailens_navigate**: Directs the active browser tab to a new URL.
-- **mcp_mirailens_go_back**: Navigates back in history.
-- **mcp_mirailens_go_forward**: Navigates forward in history.
-- **mcp_mirailens_click**: Simulates a click event on an element.
-- **mcp_mirailens_hover**: Simulates hovering over an element.
-- **mcp_mirailens_type**: Inputs text into a target field.
-- **mcp_mirailens_select_option**: Selects dropdown choice list values.
-- **mcp_mirailens_press_key**: Simulates a keyboard key press.
-- **mcp_mirailens_wait**: Sleeps browser automation for a specified number of seconds.
-- **mcp_mirailens_snapshot**: Captures an accessibility ARIA snapshot tree of the page.
-- **mcp_mirailens_get_console_logs**: Retrieves the tab console output.
-- **mcp_mirailens_screenshot**: Captures a full-view screenshot.
-- **undo_last**: Reverts the last input restoration.
-- **get_action_history**: Returns action history logs.
+The browser extension relies on standard permissions to manage automation safety:
+- **`scripting`**: Injects page automation controls and retrieves accessibility nodes.
+- **`tabs` / `activeTab`**: Obtains active tab hostnames to check policy matches and redirect targets.
+- **`storage`**: Persists Trusted/Blocked domain lists and the append-only action ledger.
+- **`<all_urls>` host permissions**: Permits execution on page origins targeted by automation tasks.
 
 ---
 
-## Security Model & Trust Boundaries
+## Supported Clients & Browsers
 
-The security boundaries of MiraiLens reside inside the extension context:
+### MCP Clients
+- **Cursor**: Fully supported (v0.40.4+).
+- **Claude Desktop**: Fully supported (v0.7.0+).
+- **MCP Inspector**: Fully supported (v0.1.0+).
 
-1. **Extension Enforcement**: The browser extension is the ultimate enforcement authority. It validates client requests independently of the server.
-2. **Draft-Only Mode**: When enabled, the extension blocks form submissions (`submit` buttons, `ENTER` keys, form submittals) to prevent accidental mutation while still allowing data-filling.
-3. **Sensitive-Field Protection**: The extension identifies password, PIN, CVV, and credit card fields, and blocks AI access unless policy is explicitly set, and automatically redacts all input data in local ledger feeds.
-4. **Trusted & Blocked Domains**: Blocked domains are immediately denied. Trusted domains allow low-risk automation to proceed without human overlays, while unknown domains default to approval gating.
-
-For details, view the [Threat Model](threat_model.md) and [Security Policy](SECURITY.md).
-
----
-
-## Accountability & Ledger
-
-MiraiLens creates an append-only local action history log saved securely under `chrome.storage.local`. It records:
-- Timestamp, Actor (`AI` vs `HUMAN`), Action Type, Target element selector, Policy parameters, and Outcome verification status.
-- Session logs can be inspected and exported to JSON in the **History Dashboard Console**.
-
----
-
-## Undo Limitations
-
-The input undo recovery feature has the following constraints:
-- **Restoration Scope**: Only non-sensitive input text elements (`browser_type` actions) are snapshot.
-- **Irreversible Actions**: Button clicks, navigation changes, form submissions, and background API queries triggered by scripts cannot be reversed.
-- **Expiry Check**: Snapshots expire immediately upon tab URL redirects, page navigation, or tab closure.
-
----
-
-## Compatibility Matrix
-
-### Supported Clients
-
-| Client | Status | Tested Version | Notes |
-|--------|--------|----------------|-------|
-| Cursor | **SUPPORTED** | v0.40.4+ | Works natively via stdio npx configurations. |
-| MCP Inspector | **SUPPORTED** | v0.1.0+ | Verified for direct JSON-RPC validation checks. |
-| Claude Desktop | **SUPPORTED** | v0.7.0+ | Fully compatible with configuration presets. |
-
-### Supported Browsers
-
-- **Google Chrome / Chromium**: **SUPPORTED** (Recommended for full extension capabilities).
-- **Microsoft Edge**: **SUPPORTED** (Fully compatible).
-- **Mozilla Firefox**: **NOT SUPPORTED** (Uses MV3 APIs not fully aligned with Chrome scripting namespace).
+### Web Browsers
+- **Google Chrome / Chromium**: Fully supported (Recommended).
+- **Microsoft Edge**: Fully supported.
+- **Mozilla Firefox**: Not supported (incompatible scripting execution models).
 
 ### Protocol Compatibility Policy
-- The current stable protocol is frozen at **v1.0**.
-- **Breaking Changes**: Altering socket command JSON payloads or changing schema keys constitutes a breaking change.
-- **Guarantees**: Version v1.0 clients will be supported for all future patch releases in the v1.2.x line.
+- The server protocol is frozen at version **v1.0**.
+- Future patches in the v1.2.x series will maintain backward compatibility with all v1.0 clients.
 
 ---
 
-## Development
+## Contributing & Development
 
-Build and run tests inside the repository:
-
-```bash
-# Type check TypeScript codebase
-npm run typecheck
-
-# Build server distribution
-npm run build
-
-# Run all test suites
-npm test
-```
-
-For more info, read the [Contributing Guide](CONTRIBUTING.md).
+For setup parameters, branch conventions, and testing commands, please read our [Contributing Guide](CONTRIBUTING.md) and [Changelog](CHANGELOG.md).
 
 ---
 
