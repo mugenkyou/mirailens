@@ -17,6 +17,15 @@ export interface SocketMessageMap {
   browser_control: { action: string };
   get_control_state: {};
   get_agent_status: {};
+  get_policy: {};
+  set_policy: {
+    draftOnly?: boolean;
+    sensitiveFieldDecision?: 'ALWAYS_ASK' | 'ALWAYS_DENY';
+    addTrustedDomain?: string;
+    removeTrustedDomain?: string;
+    addBlockedDomain?: string;
+    removeBlockedDomain?: string;
+  };
 }
 
 export type MessageType<T> = keyof T;

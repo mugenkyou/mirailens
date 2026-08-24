@@ -21,8 +21,19 @@ const TRANSITION_MATRIX = {
 };
 
 const CONTROL_STATE_KEY = 'controlState';
+const POLICY_KEY = 'mirailensPolicy';
+
+// Default policy settings
+const DEFAULT_POLICY = {
+  draftOnly: false,
+  trustedDomains: ['localhost', '127.0.0.1'],
+  blockedDomains: ['attacker.com', 'evil.com'],
+  sensitiveFieldDecision: 'ALWAYS_ASK' // 'ALWAYS_ASK' | 'ALWAYS_DENY'
+};
+
 let controlState = STATES.IDLE; // default, overridden by init
 let activeAction = null; // { id, type, auditRecord, reject }
+let currentPolicy = { ...DEFAULT_POLICY };
 
 const auditLog = [];
 
@@ -68,13 +79,135 @@ function persistControlState(state, source) {
   controlState = state;
 }
 
+function matchDomain(pattern, hostname) {
+  if (!pattern || !hostname) return false;
+  const lowerPattern = pattern.toLowerCase().trim();
+  const lowerHostname = hostname.toLowerCase().trim();
+
+  if (lowerPattern === '*') return true;
+
+  if (lowerPattern.startsWith('*.')) {
+    const base = lowerPattern.substring(2);
+    return lowerHostname === base || lowerHostname.endsWith('.' + base);
+  }
+
+  return lowerHostname === lowerPattern;
+}
+
+function isDomainBlocked(hostname) {
+  if (!hostname) return false;
+  return currentPolicy.blockedDomains.some(pattern => matchDomain(pattern, hostname));
+}
+
+function isDomainTrusted(hostname) {
+  if (!hostname) return false;
+  return currentPolicy.trustedDomains.some(pattern => matchDomain(pattern, hostname));
+}
+
+function evaluatePolicy(hostname, actionType, props) {
+  // 1. Blocked domains
+  if (isDomainBlocked(hostname)) {
+    return { decision: 'ALWAYS_DENY', reasonCode: 'BLOCKED_DOMAIN', message: 'Action blocked because this domain is blocked by extension policy.' };
+  }
+
+  // 2. Draft-only mode
+  if (currentPolicy.draftOnly && props && props.isSubmit) {
+    return { decision: 'ALWAYS_DENY', reasonCode: 'DRAFT_ONLY', message: 'Form submission is blocked because Draft-Only Mode is active.' };
+  }
+
+  // 3. Sensitive fields
+  if (props && props.isSensitiveField) {
+    const decision = currentPolicy.sensitiveFieldDecision || 'ALWAYS_ASK';
+    return { decision, reasonCode: 'SENSITIVE_FIELD', message: `Action on sensitive field is ${decision} by policy.` };
+  }
+
+  // 4. Default rules based on domain trust
+  if (isDomainTrusted(hostname)) {
+    return { decision: 'AUTO_EXECUTE', reasonCode: 'TRUSTED_DOMAIN', message: 'Action auto-executed on trusted domain.' };
+  }
+
+  // 5. Unknown domains
+  return { decision: 'ALWAYS_ASK', reasonCode: 'UNKNOWN_POLICY', message: 'Approval required for unknown domain.' };
+}
+
+async function inspectElementProperties(tabId, selector) {
+  if (!tabId || !selector) return null;
+  try {
+    return await exec(tabId, (sel) => {
+      try {
+        const el = document.querySelector(sel);
+        if (!el) return { exists: false };
+
+        const tag = el.tagName.toLowerCase();
+        const type = (el.getAttribute('type') || '').toLowerCase();
+        const autocomplete = (el.getAttribute('autocomplete') || '').toLowerCase();
+        const name = (el.getAttribute('name') || '').toLowerCase();
+        const id = (el.getAttribute('id') || '').toLowerCase();
+        const className = el.className ? String(el.className).toLowerCase() : '';
+        const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+        const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
+
+        // Sensitive field keywords
+        const sensitiveKeywords = ['password', 'passwd', 'pin', 'cvv', 'cvc', 'creditcard', 'cardnumber', 'ccnum', 'ssn', 'socialsecurity'];
+        const isSensitiveField =
+          type === 'password' ||
+          ['cc-number', 'cc-csc', 'cc-exp', 'current-password', 'new-password', 'one-time-code'].includes(autocomplete) ||
+          sensitiveKeywords.some(kw => name.includes(kw) || id.includes(kw) || className.includes(kw) || ariaLabel.includes(kw) || placeholder.includes(kw));
+
+        // Form submission detection
+        const form = el.closest('form');
+        const isSubmit =
+          type === 'submit' ||
+          tag === 'button' && (type === '' || type === 'submit') ||
+          (form && (name.includes('submit') || id.includes('submit') || className.includes('submit')));
+
+        return {
+          exists: true,
+          tag,
+          type,
+          isSensitiveField,
+          isSubmit,
+          hasForm: !!form
+        };
+      } catch (_) {
+        return { exists: false, error: true };
+      }
+    }, [selector]);
+  } catch (_) {
+    return null;
+  }
+}
+
 function initControlState() {
-  chrome.storage.local.get([CONTROL_STATE_KEY, 'isEmergencyStop', 'pausedBy', 'connectedTabId'], (data) => {
+  chrome.storage.local.get([CONTROL_STATE_KEY, 'isEmergencyStop', 'pausedBy', 'connectedTabId', POLICY_KEY], (data) => {
     isEmergencyStop = !!data.isEmergencyStop;
     pausedBy = data.pausedBy || null;
     connectedTabId = data.connectedTabId || null;
+
+    // Load policy
+    if (data[POLICY_KEY]) {
+      try {
+        const parsed = typeof data[POLICY_KEY] === 'string' ? JSON.parse(data[POLICY_KEY]) : data[POLICY_KEY];
+        if (parsed && typeof parsed === 'object' && Array.isArray(parsed.trustedDomains) && Array.isArray(parsed.blockedDomains)) {
+          currentPolicy = {
+            draftOnly: !!parsed.draftOnly,
+            trustedDomains: parsed.trustedDomains.map(String),
+            blockedDomains: parsed.blockedDomains.map(String),
+            sensitiveFieldDecision: ['ALWAYS_ASK', 'ALWAYS_DENY'].includes(parsed.sensitiveFieldDecision) ? parsed.sensitiveFieldDecision : 'ALWAYS_ASK'
+          };
+        } else {
+          currentPolicy = { ...DEFAULT_POLICY };
+        }
+      } catch (e) {
+        currentPolicy = { ...DEFAULT_POLICY };
+      }
+    } else {
+      currentPolicy = { ...DEFAULT_POLICY };
+      chrome.storage.local.set({ [POLICY_KEY]: currentPolicy }, () => {});
+    }
+
     const stored = data[CONTROL_STATE_KEY];
-    
+
     if (isEmergencyStop) {
       persistControlState(STATES.BLOCKED, 'init_emergency_stop');
     } else if (pausedBy) {
@@ -107,6 +240,22 @@ chrome.storage.onChanged.addListener((changes, area) => {
     if (changes.pausedBy) {
       pausedBy = changes.pausedBy.newValue || null;
     }
+    if (changes[POLICY_KEY]) {
+      const val = changes[POLICY_KEY].newValue;
+      if (val) {
+        try {
+          const parsed = typeof val === 'string' ? JSON.parse(val) : val;
+          if (parsed && typeof parsed === 'object' && Array.isArray(parsed.trustedDomains) && Array.isArray(parsed.blockedDomains)) {
+            currentPolicy = {
+              draftOnly: !!parsed.draftOnly,
+              trustedDomains: parsed.trustedDomains.map(String),
+              blockedDomains: parsed.blockedDomains.map(String),
+              sensitiveFieldDecision: ['ALWAYS_ASK', 'ALWAYS_DENY'].includes(parsed.sensitiveFieldDecision) ? parsed.sensitiveFieldDecision : 'ALWAYS_ASK'
+            };
+          }
+        } catch (_) {}
+      }
+    }
   }
 });
 
@@ -117,13 +266,13 @@ function transitionTo(nextState, source) {
     console.error(`Invalid state transition: ${prevState} → ${nextState} (requested by ${source})`);
     return { success: false, reason: `Invalid transition from ${prevState} to ${nextState}` };
   }
-  
+
   persistControlState(nextState, source);
-  
+
   if (nextState === STATES.HUMAN_TAKEOVER || nextState === STATES.HUMAN_CONTROLLED || nextState === STATES.BLOCKED) {
     abortActiveAction(`Execution halted: transitioned to ${nextState}`);
   }
-  
+
   sendPopupStatus('Connected');
   notifyServerStateChange(nextState);
   return { success: true };
@@ -204,7 +353,7 @@ function handleControlAction(action, source = 'ai') {
     if (pausedBy === 'human' && source !== 'human' && source !== 'human_implicit') {
       return { success: false, reason: "Cannot resume: paused by human." };
     }
-    
+
     if (controlState === STATES.IDLE || controlState === STATES.AGENT_RUNNING) {
       return { success: true };
     }
@@ -391,26 +540,26 @@ function verifyActionOutcome(before, after) {
       reasons.push('Target text changed.');
       changed = true;
     }
-    
+
     for (const key of Object.keys(before.targetAttributes)) {
       if (before.targetAttributes[key] !== after.targetAttributes[key]) {
         reasons.push(`Attribute ${key} changed.`);
         changed = true;
       }
     }
-    
+
     for (const key of Object.keys(after.targetAttributes)) {
       if (before.targetAttributes[key] === undefined) {
         reasons.push(`Attribute ${key} added.`);
         changed = true;
       }
     }
-    
+
     if (changed) {
       return { outcome: 'VERIFIED', before, after, reasons };
     }
   }
-  
+
   if (after.parentText && before.parentText !== after.parentText) {
     const lowerAfter = after.parentText.toLowerCase();
     if (lowerAfter.includes('success') || lowerAfter.includes('saved') || lowerAfter.includes('done') || lowerAfter.includes('thank')) {
@@ -427,7 +576,7 @@ async function handleMCPMessage(message) {
   try {
     const { type, payload, id } = message;
     console.log('Received MCP message:', type, payload);
-    
+
     if (type === 'browser_control') {
       const { action } = payload;
       const res = handleControlAction(action, 'ai');
@@ -438,13 +587,56 @@ async function handleMCPMessage(message) {
       }
       return;
     }
-    
+
     if (type === 'get_control_state' || type === 'get_agent_status') {
       sendResponse(id, type, {
         state: controlState,
         connectionStatus: ws && ws.readyState === WebSocket.OPEN ? 'connected' : 'disconnected',
         allowedToExecute: canExecuteAIAction().allowed
       });
+      return;
+    }
+
+    if (type === 'get_policy') {
+      sendResponse(id, type, { policy: currentPolicy });
+      return;
+    }
+
+    if (type === 'set_policy') {
+      const tabId = await getActiveTabId();
+      if (!tabId) {
+        sendError(id, type, "No connected tab to authorize policy modification.");
+        return;
+      }
+      try {
+        const approval = await requestHumanApproval(tabId, 'set_policy', null, JSON.stringify(payload), 'ALWAYS_ASK');
+        if (approval && approval.approved) {
+          const updated = {
+            draftOnly: payload.draftOnly !== undefined ? !!payload.draftOnly : currentPolicy.draftOnly,
+            sensitiveFieldDecision: payload.sensitiveFieldDecision !== undefined ? payload.sensitiveFieldDecision : currentPolicy.sensitiveFieldDecision,
+            trustedDomains: payload.trustedDomains !== undefined ? payload.trustedDomains : currentPolicy.trustedDomains,
+            blockedDomains: payload.blockedDomains !== undefined ? payload.blockedDomains : currentPolicy.blockedDomains
+          };
+          if (payload.addTrustedDomain) {
+            if (!updated.trustedDomains.includes(payload.addTrustedDomain)) updated.trustedDomains.push(payload.addTrustedDomain);
+          }
+          if (payload.removeTrustedDomain) {
+            updated.trustedDomains = updated.trustedDomains.filter(d => d !== payload.removeTrustedDomain);
+          }
+          if (payload.addBlockedDomain) {
+            if (!updated.blockedDomains.includes(payload.addBlockedDomain)) updated.blockedDomains.push(payload.addBlockedDomain);
+          }
+          if (payload.removeBlockedDomain) {
+            updated.blockedDomains = updated.blockedDomains.filter(d => d !== payload.removeBlockedDomain);
+          }
+          chrome.storage.local.set({ [POLICY_KEY]: updated }, () => {});
+          sendResponse(id, type, { success: true, policy: updated });
+        } else {
+          sendError(id, type, "Human denied policy modification request.");
+        }
+      } catch (e) {
+        sendError(id, type, e.message || String(e));
+      }
       return;
     }
 
@@ -477,19 +669,66 @@ async function handleMCPMessage(message) {
       return;
     }
 
+    const isConsequential = ['browser_click', 'browser_type', 'browser_navigate'].includes(type);
     const shouldVerify = type === 'browser_click' || type === 'browser_type';
     const rawSelector = payload ? (payload.element || payload.selector) : null;
     const selector = typeof rawSelector === 'string' && rawSelector.trim() ? rawSelector : null;
 
+    let props = null;
+    let targetHostname = '';
+    let tabId = null;
+
+    if (isConsequential) {
+      tabId = await getActiveTabId();
+      let activeHostname = '';
+      if (tabId) {
+        const tab = await tabsQuery({ active: true, currentWindow: true }).then(t => t[0]);
+        if (tab && tab.url) {
+          try {
+            activeHostname = new URL(tab.url).hostname;
+          } catch (_) {}
+        }
+      }
+
+      targetHostname = activeHostname;
+      if (type === 'browser_navigate' && payload && payload.url) {
+        try {
+          targetHostname = new URL(payload.url).hostname;
+        } catch (_) {}
+      }
+
+      // Policy Gate Check
+      if (shouldVerify && selector && tabId) {
+        props = await inspectElementProperties(tabId, selector);
+      }
+
+      const evalResult = evaluatePolicy(targetHostname, type, props);
+      if (evalResult.decision === 'ALWAYS_DENY') {
+        console.warn(`[MiraiLens] Policy ALWAYS_DENY triggered: ${evalResult.reasonCode}`);
+        sendError(id, type, {
+          allowed: false,
+          decision: evalResult.decision,
+          reasonCode: evalResult.reasonCode,
+          message: evalResult.message,
+          controlState: STATES.BLOCKED
+        });
+        transitionTo(STATES.BLOCKED, 'policy_engine');
+        return;
+      }
+    }
+
     let beforeState = null;
     let auditRecord = null;
-    
+
     if (shouldVerify) {
+      const isSensitive = props && props.isSensitiveField;
+      const targetText = isSensitive ? `${selector} [Sensitive Value Masked]` : selector;
+
       auditRecord = {
         id: crypto.randomUUID(),
         timestamp: Date.now(),
         action: type,
-        target: selector,
+        target: targetText,
         risk: 'UNKNOWN',
         decision: 'UNKNOWN',
         execution: 'UNKNOWN',
@@ -504,7 +743,6 @@ async function handleMCPMessage(message) {
       if (selector) {
         console.log(`[Phase5] Verification enabled: ${type}`);
         console.log('[Phase5] Capturing before state');
-        const tabId = await getActiveTabId();
         beforeState = await captureActionState(tabId, selector);
       } else {
         console.log('[Phase5] Verification skipped: invalid selector');
@@ -545,7 +783,7 @@ async function handleMCPMessage(message) {
     try {
       const result = await actionPromise;
       activeAction = null;
-      
+
       if (auditRecord) {
         console.log(`[Phase6] Risk recorded: ${auditRecord.risk}`);
         if (result && result.approved === false) {
@@ -589,7 +827,7 @@ async function handleMCPMessage(message) {
       if (controlState === STATES.AGENT_RUNNING) {
         transitionTo(STATES.IDLE, 'finish_action');
       }
-      
+
       let finalResult = result;
       if (verification) {
         if (typeof result === 'object' && result !== null) {
@@ -651,11 +889,321 @@ function sendError(id, type, error) {
       ws.send(JSON.stringify({ type: `${type}_result`, error: typeof error === 'string' ? error : JSON.stringify(error), timestamp: Date.now() }));
     }
   }
+}async function requestHumanApproval(tabId, actionType, selector, details, policyDecision) {
+  const actionId = 'tok_' + Math.random().toString(36).substr(2, 9);
+
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      if (pendingPreviews.has(tabId)) {
+        pendingPreviews.delete(tabId);
+        exec(tabId, () => {
+          const ui = document.getElementById('mirailens-preview-overlay');
+          if (ui) ui.remove();
+        }).catch(() => {});
+        reject(new Error("Human approval timed out."));
+      }
+    }, 30000); // 30s timeout
+
+    tabsQuery({ active: true, currentWindow: true }).then(async (tabs) => {
+      const currentTab = tabs[0];
+      const currentUrl = currentTab ? currentTab.url : '';
+
+      pendingPreviews.set(tabId, { actionId, status: 'PENDING', resolve, reject, timeoutId, targetSelector: selector, actionType, url: currentUrl });
+
+      try {
+        const result = await exec(tabId, (actId, actType, sel, dls, polDec) => {
+          return new Promise((res) => {
+            let target = null;
+            let rect = { left: 100, top: 100, width: 200, height: 100 }; // default
+
+            if (sel) {
+              const elements = document.querySelectorAll(sel);
+              if (elements.length === 0) {
+                 return res({ error: "Target selector matched zero elements." });
+              }
+              if (elements.length > 1) {
+                 return res({ error: "Target selector matched multiple elements." });
+              }
+              target = elements[0];
+              target.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
+              rect = target.getBoundingClientRect();
+            }
+
+            let riskLevel = 'LOW';
+            let reasons = [];
+
+            if (actType === 'click' || actType === 'type') {
+              if (target) {
+                const text = (target.innerText || target.textContent || '').toLowerCase().trim();
+                const tag = target.tagName.toLowerCase();
+                const typeAttr = (target.getAttribute('type') || '').toLowerCase();
+                const href = (target.getAttribute('href') || '').toLowerCase();
+                const form = target.closest('form');
+
+                const highKeywords = ['delete', 'remove', 'erase', 'destroy', 'terminate', 'close account', 'delete account', 'cancel subscription', 'pay', 'purchase', 'buy', 'transfer', 'withdraw', 'send money', 'confirm payment'];
+                const mediumKeywords = ['submit', 'save', 'update', 'change', 'edit', 'confirm', 'send', 'apply', 'publish', 'upload', 'create'];
+
+                if (highKeywords.some(kw => text.includes(kw) || href.includes(kw))) {
+                  riskLevel = 'HIGH';
+                  reasons.push('Contains high-risk keyword.');
+                } else if (mediumKeywords.some(kw => text.includes(kw) || href.includes(kw))) {
+                  riskLevel = 'MEDIUM';
+                  reasons.push('Contains medium-risk keyword.');
+                }
+                if (form) {
+                  if (riskLevel === 'LOW') riskLevel = 'MEDIUM';
+                  reasons.push('Form interaction detected.');
+                }
+              }
+            } else if (actType === 'navigate') {
+              riskLevel = 'MEDIUM';
+              reasons.push('Navigation to external URL.');
+            } else if (actType === 'set_policy') {
+              riskLevel = 'HIGH';
+              reasons.push('Security-sensitive policy modification.');
+            }
+
+            const isSensitive = actType === 'type' && target && (
+              target.type === 'password' ||
+              (target.getAttribute('name') || '').includes('password') ||
+              (target.getAttribute('id') || '').includes('password')
+            );
+            if (isSensitive) {
+              riskLevel = 'HIGH';
+              reasons.push('Input target is a password/sensitive field.');
+            }
+
+            if (reasons.length === 0) {
+              reasons.push('Informational action.');
+            }
+
+            const overlayHost = document.createElement('div');
+            overlayHost.id = 'mirailens-preview-overlay';
+            overlayHost.style.position = 'fixed';
+            overlayHost.style.top = '0';
+            overlayHost.style.left = '0';
+            overlayHost.style.width = '100vw';
+            overlayHost.style.height = '100vh';
+            overlayHost.style.zIndex = '2147483647';
+            overlayHost.style.pointerEvents = 'none';
+
+            const shadow = overlayHost.attachShadow({ mode: 'closed' });
+
+            if (sel) {
+              const highlight = document.createElement('div');
+              highlight.style.position = 'absolute';
+              highlight.style.left = rect.left + 'px';
+              highlight.style.top = rect.top + 'px';
+              highlight.style.width = rect.width + 'px';
+              highlight.style.height = rect.height + 'px';
+              highlight.style.border = '3px solid #ff00ff';
+              highlight.style.boxSizing = 'border-box';
+              highlight.style.backgroundColor = 'rgba(255, 0, 255, 0.2)';
+              highlight.style.pointerEvents = 'none';
+              shadow.appendChild(highlight);
+            }
+
+            const panel = document.createElement('div');
+            panel.style.position = 'absolute';
+            panel.style.left = Math.max(0, rect.left) + 'px';
+            panel.style.top = Math.max(0, rect.bottom + 10) + 'px';
+            panel.style.backgroundColor = '#ffffff';
+            panel.style.border = '1px solid #ccc';
+            panel.style.borderRadius = '6px';
+            panel.style.padding = '12px';
+            panel.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+            panel.style.fontFamily = 'system-ui, sans-serif';
+            panel.style.pointerEvents = 'auto';
+            panel.style.display = 'flex';
+            panel.style.flexDirection = 'column';
+            panel.style.gap = '8px';
+            panel.style.color = '#000';
+
+            const title = document.createElement('div');
+            let desc = `AI wants to click this element.`;
+            if (actType === 'type') {
+              const displayVal = isSensitive ? '[Sensitive Value Masked]' : `"${dls}"`;
+              desc = `AI wants to type ${displayVal} here.`;
+            } else if (actType === 'navigate') {
+              desc = `AI wants to navigate to "${dls}".`;
+            } else if (actType === 'set_policy') {
+              desc = `AI requests extension policy update: ${dls}`;
+            }
+            title.innerHTML = `<strong>MiraiLens Action Preview</strong><br/>${desc}`;
+            title.style.fontSize = '14px';
+            panel.appendChild(title);
+
+            const riskDisplay = document.createElement('div');
+            riskDisplay.style.fontSize = '13px';
+
+            let riskColor = '#28a745';
+            if (riskLevel === 'MEDIUM') riskColor = '#d39e00';
+            if (riskLevel === 'HIGH') riskColor = '#dc3545';
+
+            const riskLabel = document.createElement('strong');
+            riskLabel.style.color = riskColor;
+            riskLabel.textContent = `Risk: ${riskLevel}`;
+            riskDisplay.appendChild(riskLabel);
+
+            const why = document.createElement('div');
+            why.style.marginTop = '4px';
+            why.style.color = '#555';
+            why.textContent = 'Why: ' + reasons.join(' / ');
+            riskDisplay.appendChild(why);
+            panel.appendChild(riskDisplay);
+
+            let autoApproveInterval = null;
+            let isDeniedOrApproved = false;
+
+            // Check auto approve conditions
+            if (polDec === 'AUTO_EXECUTE' || (riskLevel === 'LOW' && polDec !== 'ALWAYS_ASK')) {
+              const autoText = document.createElement('div');
+              autoText.style.fontSize = '13px';
+              autoText.style.fontWeight = 'bold';
+              autoText.style.color = '#17a2b8';
+              let countdown = 4;
+              autoText.textContent = `Auto-approving in ${countdown}...`;
+              panel.appendChild(autoText);
+
+              autoApproveInterval = setInterval(() => {
+                if (isDeniedOrApproved) {
+                  clearInterval(autoApproveInterval);
+                  return;
+                }
+                countdown--;
+                if (countdown > 0) {
+                  autoText.textContent = `Auto-approving in ${countdown}...`;
+                } else {
+                  clearInterval(autoApproveInterval);
+                  if (!isDeniedOrApproved) {
+                    isDeniedOrApproved = true;
+                    overlayHost.remove();
+                    res({ action: 'approve', token: actId, risk: riskLevel });
+                  }
+                }
+              }, 1000);
+            }
+
+            const btnRow = document.createElement('div');
+            btnRow.style.display = 'flex';
+            btnRow.style.gap = '8px';
+
+            const btnDeny = document.createElement('button');
+            btnDeny.textContent = 'DENY';
+            btnDeny.style.background = '#dc3545';
+            btnDeny.style.color = '#fff';
+            btnDeny.style.border = 'none';
+            btnDeny.style.padding = '6px 12px';
+            btnDeny.style.borderRadius = '4px';
+            btnDeny.style.cursor = 'pointer';
+            btnRow.appendChild(btnDeny);
+
+            const btnApprove = document.createElement('button');
+            if (riskLevel === 'HIGH') {
+              btnApprove.textContent = 'CONFIRM DANGER';
+              btnApprove.style.background = '#dc3545';
+            } else {
+              btnApprove.textContent = 'APPROVE';
+              btnApprove.style.background = '#28a745';
+            }
+            btnApprove.style.color = '#fff';
+            btnApprove.style.border = 'none';
+            btnApprove.style.padding = '6px 12px';
+            btnApprove.style.borderRadius = '4px';
+            btnApprove.style.cursor = 'pointer';
+
+            if (polDec === 'ALWAYS_ASK' || riskLevel !== 'LOW') {
+              btnRow.appendChild(btnApprove);
+            }
+            panel.appendChild(btnRow);
+
+            shadow.appendChild(panel);
+            document.body.appendChild(overlayHost);
+
+            btnDeny.addEventListener('click', () => {
+              if (isDeniedOrApproved) return;
+              isDeniedOrApproved = true;
+              if (autoApproveInterval) clearInterval(autoApproveInterval);
+              overlayHost.remove();
+              res({ action: 'deny', token: actId, risk: riskLevel });
+            });
+
+            let confirmedDanger = false;
+            btnApprove.addEventListener('click', () => {
+              if (isDeniedOrApproved) return;
+              if (riskLevel === 'HIGH' && !confirmedDanger) {
+                confirmedDanger = true;
+                btnApprove.textContent = 'CONFIRM DANGER (CLICK AGAIN)';
+                btnApprove.style.background = '#ff0000';
+                return;
+              }
+              isDeniedOrApproved = true;
+              if (autoApproveInterval) clearInterval(autoApproveInterval);
+              overlayHost.remove();
+              res({ action: 'approve', token: actId, risk: riskLevel });
+            });
+          });
+        }, [actionId, actionType, selector, details, policyDecision]);
+
+        if (!pendingPreviews.has(tabId)) return;
+        const pending = pendingPreviews.get(tabId);
+        clearTimeout(pending.timeoutId);
+        pendingPreviews.delete(tabId);
+
+        if (!result) {
+          return reject(new Error("Failed to inject preview UI or tab closed."));
+        }
+        if (result.error) {
+          return reject(new Error(result.error));
+        }
+        if (result.action === 'deny') {
+          if (activeAction && activeAction.auditRecord) {
+            activeAction.auditRecord.risk = result.risk || 'UNKNOWN';
+            activeAction.auditRecord.decision = 'HUMAN_DENIED';
+          }
+          return resolve({ approved: false, reason: "Human denied the action" });
+        }
+        if (result.action === 'approve') {
+          if (result.token === actionId) {
+            if (activeAction && activeAction.auditRecord) {
+              activeAction.auditRecord.risk = result.risk || 'UNKNOWN';
+              activeAction.auditRecord.decision = 'HUMAN_APPROVED';
+            }
+            return resolve({ approved: true });
+          } else {
+            return reject(new Error("Security violation: invalid approval token."));
+          }
+        }
+        return reject(new Error("Unknown preview result"));
+      } catch (err) {
+        if (pendingPreviews.has(tabId)) {
+          clearTimeout(pendingPreviews.get(tabId).timeoutId);
+          pendingPreviews.delete(tabId);
+        }
+        reject(err);
+      }
+    });
+  });
 }
 
 async function handleNavigate(payload) {
   const tabId = await getActiveTabId();
   if (tabId && payload.url) {
+    let activeHostname = '';
+    const tab = await tabsQuery({ active: true, currentWindow: true }).then(t => t[0]);
+    if (tab && tab.url) {
+      try { activeHostname = new URL(tab.url).hostname; } catch (_) {}
+    }
+    const evalResult = evaluatePolicy(activeHostname, 'browser_navigate', null);
+
+    // Request approval if not auto-execute
+    if (evalResult.decision !== 'AUTO_EXECUTE') {
+      const approval = await requestHumanApproval(tabId, 'navigate', null, payload.url, evalResult.decision);
+      if (!approval || !approval.approved) {
+        throw new Error("Human denied navigation.");
+      }
+    }
+
     await tabsUpdate(tabId, { url: payload.url });
     try { await waitForTabComplete(tabId, 45000); } catch (_e) {}
     return true;
@@ -690,342 +1238,78 @@ async function handleWait(payload) {
 async function handleClick(payload) {
   const tabId = await getActiveTabId();
   const selector = payload.element || payload.selector;
-  
+
   if (!tabId || !selector) return false;
-  
+
   if (pendingPreviews.has(tabId)) {
     throw new Error("Another action is awaiting human approval.");
   }
-  
-  return new Promise((resolve, reject) => {
-    const actionId = Math.random().toString(36).substr(2, 9);
-    
-    const timeoutId = setTimeout(() => {
-      if (pendingPreviews.has(tabId)) {
-        pendingPreviews.delete(tabId);
-        exec(tabId, () => {
-          const ui = document.getElementById('mirailens-preview-overlay');
-          if (ui) ui.remove();
-        }).catch(() => {});
-        reject(new Error("Human approval timed out."));
-      }
-    }, 30000); // 30s timeout
-    
-    pendingPreviews.set(tabId, { actionId, status: 'PENDING', resolve, reject, timeoutId });
-    
-    exec(tabId, (sel) => {
-      return new Promise((res, rej) => {
-        const elements = document.querySelectorAll(sel);
-        if (elements.length === 0) {
-           return res({ error: "Target selector matched zero elements." });
-        }
-        if (elements.length > 1) {
-           return res({ error: "Target selector matched multiple elements." });
-        }
-        
-        const target = elements[0];
-        
-        function analyzeRisk(el) {
-          try {
-            const text = (el.innerText || el.textContent || '').toLowerCase().trim();
-            const tag = el.tagName.toLowerCase();
-            const type = (el.getAttribute('type') || '').toLowerCase();
-            const href = (el.getAttribute('href') || '').toLowerCase();
-            const form = el.closest('form');
-            
-            const highKeywords = ['delete', 'remove', 'erase', 'destroy', 'terminate', 'close account', 'delete account', 'cancel subscription', 'pay', 'purchase', 'buy', 'transfer', 'withdraw', 'send money', 'confirm payment'];
-            const mediumKeywords = ['submit', 'save', 'update', 'change', 'edit', 'confirm', 'send', 'apply', 'publish', 'upload', 'create'];
-            
-            let level = 'LOW';
-            const reasons = [];
-            
-            if (highKeywords.some(kw => text.includes(kw) || href.includes(kw))) {
-              level = 'HIGH';
-              reasons.push(`Contains high-risk keyword.`);
-            } else if (mediumKeywords.some(kw => text.includes(kw) || href.includes(kw))) {
-              level = 'MEDIUM';
-              reasons.push(`Contains medium-risk keyword.`);
-            }
-            
-            if (form) {
-               if (level === 'LOW') {
-                 level = 'MEDIUM';
-               }
-               reasons.push(`Form submission detected.`);
-            }
-            
-            if (level === 'LOW' && reasons.length === 0) {
-               reasons.push(`Standard navigation or informational action.`);
-            }
-            
-            return { level, reasons: [...new Set(reasons)] };
-          } catch (e) {
-            return { level: 'UNKNOWN', reasons: ['Risk analysis failed'] };
-          }
-        }
-        
-        const riskData = analyzeRisk(target);
-        
-        target.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
-        
-        const rect = target.getBoundingClientRect();
-        
-        const overlayHost = document.createElement('div');
-        overlayHost.id = 'mirailens-preview-overlay';
-        overlayHost.style.position = 'fixed';
-        overlayHost.style.top = '0';
-        overlayHost.style.left = '0';
-        overlayHost.style.width = '100vw';
-        overlayHost.style.height = '100vh';
-        overlayHost.style.zIndex = '2147483647';
-        overlayHost.style.pointerEvents = 'none';
-        
-        const shadow = overlayHost.attachShadow({ mode: 'closed' });
-        
-        const highlight = document.createElement('div');
-        highlight.style.position = 'absolute';
-        highlight.style.left = rect.left + 'px';
-        highlight.style.top = rect.top + 'px';
-        highlight.style.width = rect.width + 'px';
-        highlight.style.height = rect.height + 'px';
-        highlight.style.border = '3px solid #ff00ff';
-        highlight.style.boxSizing = 'border-box';
-        highlight.style.backgroundColor = 'rgba(255, 0, 255, 0.2)';
-        highlight.style.pointerEvents = 'none';
-        
-        const panel = document.createElement('div');
-        panel.style.position = 'absolute';
-        panel.style.left = Math.max(0, rect.left) + 'px';
-        panel.style.top = Math.max(0, rect.bottom + 10) + 'px';
-        panel.style.backgroundColor = '#ffffff';
-        panel.style.border = '1px solid #ccc';
-        panel.style.borderRadius = '6px';
-        panel.style.padding = '12px';
-        panel.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
-        panel.style.fontFamily = 'system-ui, sans-serif';
-        panel.style.pointerEvents = 'auto';
-        panel.style.display = 'flex';
-        panel.style.flexDirection = 'column';
-        panel.style.gap = '8px';
-        panel.style.color = '#000';
-        
-        const title = document.createElement('div');
-        title.innerHTML = '<strong>MiraiLens</strong><br/>AI wants to click this element.';
-        title.style.fontSize = '14px';
-        title.style.marginBottom = '4px';
-        panel.appendChild(title);
-        
-        const riskDisplay = document.createElement('div');
-        riskDisplay.style.fontSize = '13px';
-        riskDisplay.style.marginBottom = '12px';
-        
-        let riskColor = '#28a745'; // LOW
-        if (riskData.level === 'MEDIUM') riskColor = '#d39e00'; // dark yellow
-        if (riskData.level === 'HIGH' || riskData.level === 'UNKNOWN') riskColor = '#dc3545';
-        
-        const riskLabel = document.createElement('strong');
-        riskLabel.style.color = riskColor;
-        riskLabel.textContent = 'Risk: ' + riskData.level;
-        riskDisplay.appendChild(riskLabel);
-        
-        const whyBlock = document.createElement('div');
-        whyBlock.style.marginTop = '4px';
-        whyBlock.style.color = '#555';
-        whyBlock.textContent = 'Why:';
-        
-        const ul = document.createElement('ul');
-        ul.style.margin = '4px 0 0 0';
-        ul.style.paddingLeft = '20px';
-        
-        riskData.reasons.forEach(r => {
-          const li = document.createElement('li');
-          li.textContent = r;
-          ul.appendChild(li);
-        });
-        
-        whyBlock.appendChild(ul);
-        riskDisplay.appendChild(whyBlock);
-        
-        panel.appendChild(riskDisplay);
-        
-        let autoApproveInterval = null;
-        let isDeniedOrApproved = false;
 
-        let warningText = null;
-        if (riskData.level === 'LOW') {
-          const autoText = document.createElement('div');
-          autoText.style.fontSize = '13px';
-          autoText.style.fontWeight = 'bold';
-          autoText.style.color = '#17a2b8';
-          autoText.style.marginBottom = '8px';
-          
-          let countdown = 4;
-          autoText.textContent = `Auto-approving in ${countdown}...`;
-          panel.appendChild(autoText);
-          
-          console.log('[MiraiLens] LOW risk: countdown started at', countdown);
-          autoApproveInterval = setInterval(() => {
-            if (isDeniedOrApproved) {
-              console.log('[MiraiLens] Interval tick skipped: already denied/approved.');
-              clearInterval(autoApproveInterval);
-              return;
-            }
-            countdown--;
-            console.log('[MiraiLens] Countdown value:', countdown);
-            if (countdown > 0) {
-              autoText.textContent = `Auto-approving in ${countdown}...`;
-            } else {
-              console.log('[MiraiLens] Countdown reached zero.');
-              clearInterval(autoApproveInterval);
-              if (!isDeniedOrApproved) {
-                isDeniedOrApproved = true;
-                console.log('[MiraiLens] Auto approval triggered.');
-                overlayHost.remove();
-                
-                // Resolve first to avoid navigation race conditions blocking the response
-                res({ action: 'approve', risk: riskData.level, decision: 'AUTO_APPROVED' });
-                console.log('[MiraiLens] Promise resolved.');
-                
-                // Execute click slightly after to guarantee message is sent
-                setTimeout(() => {
-                  try {
-                    target.click();
-                    console.log('[MiraiLens] target.click() executed.');
-                  } catch (e) {
-                    console.error('[MiraiLens] target.click() failed:', e);
-                  }
-                }, 10);
-              }
-            }
-          }, 1000);
-        } else if (riskData.level === 'HIGH' || riskData.level === 'UNKNOWN') {
-          warningText = document.createElement('div');
-          warningText.style.fontSize = '13px';
-          warningText.style.fontWeight = 'bold';
-          warningText.style.color = '#dc3545';
-          warningText.style.marginBottom = '8px';
-          warningText.textContent = riskData.level === 'HIGH' ? '⚠ HIGH RISK' : '⚠ UNKNOWN RISK';
-          panel.appendChild(warningText);
-        }
-        
-        const btnRow = document.createElement('div');
-        btnRow.style.display = 'flex';
-        btnRow.style.gap = '8px';
-        
-        const btnDeny = document.createElement('button');
-        btnDeny.textContent = 'DENY';
-        btnDeny.style.background = '#dc3545';
-        btnDeny.style.color = '#fff';
-        btnDeny.style.border = 'none';
-        btnDeny.style.padding = '6px 12px';
-        btnDeny.style.borderRadius = '4px';
-        btnDeny.style.cursor = 'pointer';
-        
-        const btnApprove = document.createElement('button');
-        if (riskData.level === 'HIGH' || riskData.level === 'UNKNOWN') {
-          btnApprove.textContent = 'CONFIRM DANGER';
-          btnApprove.style.background = '#dc3545';
-          btnApprove.style.color = '#fff';
-          btnApprove.style.border = 'none';
-          btnApprove.style.padding = '6px 12px';
-          btnApprove.style.borderRadius = '4px';
-          btnApprove.style.cursor = 'pointer';
-        } else {
-          btnApprove.textContent = 'APPROVE';
-          btnApprove.style.background = '#28a745';
-          btnApprove.style.color = '#fff';
-          btnApprove.style.border = 'none';
-          btnApprove.style.padding = '6px 12px';
-          btnApprove.style.borderRadius = '4px';
-          btnApprove.style.cursor = 'pointer';
-        }
-        
-        btnRow.appendChild(btnDeny);
-        if (riskData.level !== 'LOW') {
-          btnRow.appendChild(btnApprove);
-        }
-        panel.appendChild(btnRow);
-        
-        shadow.appendChild(highlight);
-        shadow.appendChild(panel);
-        document.body.appendChild(overlayHost);
-        
-        btnDeny.addEventListener('click', () => {
-          if (isDeniedOrApproved) return;
-          isDeniedOrApproved = true;
-          if (autoApproveInterval) clearInterval(autoApproveInterval);
-          overlayHost.remove();
-          res({ action: 'deny', risk: riskData.level, decision: 'HUMAN_DENIED' });
-        });
-        
-        let highRiskConfirmStep = false;
-        
-        if (riskData.level !== 'LOW') {
-          btnApprove.addEventListener('click', () => {
-            if (isDeniedOrApproved) return;
-            
-            if ((riskData.level === 'HIGH' || riskData.level === 'UNKNOWN') && !highRiskConfirmStep) {
-              highRiskConfirmStep = true;
-              if (warningText) {
-                warningText.textContent = '⚠ CONFIRM THIS DANGEROUS ACTION';
-              }
-              return;
-            }
-            
-            isDeniedOrApproved = true;
-            if (autoApproveInterval) clearInterval(autoApproveInterval);
-            overlayHost.remove();
-            target.click();
-            res({ action: 'approve', risk: riskData.level, decision: 'HUMAN_APPROVED' });
-          });
-        }
-      });
-    }, [selector]).then((injectionResult) => {
-      if (!pendingPreviews.has(tabId)) return;
-      const pending = pendingPreviews.get(tabId);
-      clearTimeout(pending.timeoutId);
-      pendingPreviews.delete(tabId);
-      
-      if (!injectionResult) {
-         return reject(new Error("Failed to inject preview UI or tab closed."));
+  let activeHostname = '';
+  const tab = await tabsQuery({ active: true, currentWindow: true }).then(t => t[0]);
+  if (tab && tab.url) {
+    try { activeHostname = new URL(tab.url).hostname; } catch (_) {}
+  }
+
+  const props = await inspectElementProperties(tabId, selector);
+  const evalResult = evaluatePolicy(activeHostname, 'browser_click', props);
+
+  if (evalResult.decision === 'ALWAYS_DENY') {
+    throw new Error(`Policy blocked: ${evalResult.reasonCode}`);
+  }
+
+  const approval = await requestHumanApproval(tabId, 'click', selector, '', evalResult.decision);
+  if (approval && approval.approved) {
+    await exec(tabId, (sel) => {
+      const el = document.querySelector(sel);
+      if (el) {
+        el.click();
       }
-      if (injectionResult.error) {
-         return reject(new Error(injectionResult.error));
-      }
-      if (injectionResult.action === 'deny') {
-         if (activeAction && activeAction.auditRecord) {
-           activeAction.auditRecord.risk = injectionResult.risk || 'UNKNOWN';
-           activeAction.auditRecord.decision = injectionResult.decision || 'HUMAN_DENIED';
-         }
-         return resolve({ approved: false, reason: "Human denied the action" });
-      }
-      if (injectionResult.action === 'approve') {
-         if (activeAction && activeAction.auditRecord) {
-           activeAction.auditRecord.risk = injectionResult.risk || 'UNKNOWN';
-           activeAction.auditRecord.decision = injectionResult.decision || 'HUMAN_APPROVED';
-         }
-         return resolve(true);
-      }
-      return reject(new Error("Unknown preview result"));
-    }).catch((err) => {
-      if (pendingPreviews.has(tabId)) {
-        clearTimeout(pendingPreviews.get(tabId).timeoutId);
-        pendingPreviews.delete(tabId);
-      }
-      reject(err);
-    });
-  });
+    }, [selector]);
+    return true;
+  }
+  return { approved: false, reason: "Human denied the action" };
 }
 
 async function handleType(payload) {
   const tabId = await getActiveTabId();
-  if (tabId && payload.selector && payload.text) {
-    await exec(tabId, (selector, text, mode) => {
-      const el = document.querySelector(selector);
+  const selector = payload.selector || payload.element;
+
+  if (!tabId || !selector || payload.text === undefined) return false;
+
+  if (pendingPreviews.has(tabId)) {
+    throw new Error("Another action is awaiting human approval.");
+  }
+
+  let activeHostname = '';
+  const tab = await tabsQuery({ active: true, currentWindow: true }).then(t => t[0]);
+  if (tab && tab.url) {
+    try { activeHostname = new URL(tab.url).hostname; } catch (_) {}
+  }
+
+  const props = await inspectElementProperties(tabId, selector);
+  const evalResult = evaluatePolicy(activeHostname, 'browser_type', props);
+
+  if (evalResult.decision === 'ALWAYS_DENY') {
+    throw new Error(`Policy blocked: ${evalResult.reasonCode}`);
+  }
+
+  const isSensitive = props && props.isSensitiveField;
+  const loggedText = isSensitive ? '[Sensitive Value Masked]' : payload.text;
+
+  // Override audit target / values to keep secrets out of logs
+  if (activeAction && activeAction.auditRecord) {
+    activeAction.auditRecord.target = isSensitive ? `${selector} [Sensitive Value Masked]` : selector;
+  }
+
+  const approval = await requestHumanApproval(tabId, 'type', selector, loggedText, evalResult.decision);
+  if (approval && approval.approved) {
+    await exec(tabId, (sel, txt, mode) => {
+      const el = document.querySelector(sel);
       if (!el) return false;
       const applyValue = (node) => {
-        if (mode === 'append') node.value = (node.value || '') + text;
-        else node.value = text;
+        if (mode === 'append') node.value = (node.value || '') + txt;
+        else node.value = txt;
         node.dispatchEvent(new Event('input', { bubbles: true }));
         node.dispatchEvent(new Event('change', { bubbles: true }));
       };
@@ -1034,17 +1318,17 @@ async function handleType(payload) {
         return true;
       }
       if (el.isContentEditable) {
-        if (mode === 'append') el.textContent = (el.textContent || '') + text;
-        else el.textContent = text;
+        if (mode === 'append') el.textContent = (el.textContent || '') + txt;
+        else el.textContent = txt;
         el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
         return true;
       }
       return false;
-    }, [payload.selector, payload.text, payload.mode || 'replace']);
+    }, [selector, payload.text, payload.mode || 'replace']);
     return true;
   }
-  return false;
+  return { approved: false, reason: "Human denied the action" };
 }
 
 async function handleHover(payload) {
@@ -1179,41 +1463,41 @@ function connect() {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
     return true;
   }
-  
+
   try {
     if (reconnectTimeoutId) {
       clearTimeout(reconnectTimeoutId);
       reconnectTimeoutId = null;
     }
     ws = new WebSocket(serverUrl);
-    
+
     ws.onopen = () => {
       console.log('WebSocket connected to MCP server');
       sendPopupStatus('Connected');
       reconnectAttempt = 0;
       startHeartbeat();
-      ws.send(JSON.stringify({ 
+      ws.send(JSON.stringify({
         type: 'extension_connected',
         data: { version: '1.0.0', capabilities: ['navigate', 'click', 'type', 'hover', 'snapshot'] }
       }));
       notifyServerStateChange(controlState);
     };
-    
+
     ws.onclose = () => {
       console.log('WebSocket disconnected from MCP server');
       sendPopupStatus('Disconnected');
       stopHeartbeat();
       const attempt = ++reconnectAttempt;
       ws = null;
-      
+
       abortActiveAction("WebSocket disconnected.");
-      
+
       if (controlState === STATES.AGENT_RUNNING || controlState === STATES.AGENT_RESUMING) {
         transitionTo(STATES.IDLE, 'disconnect');
       } else if (controlState === STATES.HUMAN_TAKEOVER) {
         transitionTo(STATES.HUMAN_CONTROLLED, 'disconnect');
       }
-      
+
       for (const [tabId, pending] of pendingPreviews.entries()) {
         clearTimeout(pending.timeoutId);
         pending.reject(new Error("WebSocket disconnected."));
@@ -1223,19 +1507,19 @@ function connect() {
         }).catch(() => {});
       }
       pendingPreviews.clear();
-      
+
       const delay = Math.min(30000, 1000 * Math.pow(2, attempt));
       reconnectTimeoutId = setTimeout(() => {
         if (!ws) connect();
       }, delay);
     };
-    
+
     ws.onerror = (error) => {
       console.error('WebSocket error:', error);
       lastErrorMessage = String(error?.message || 'WebSocket error');
       sendPopupStatus('WebSocket error');
     };
-    
+
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
@@ -1248,7 +1532,7 @@ function connect() {
         console.error('Error parsing message:', error);
       }
     };
-    
+
     return true;
   } catch (error) {
     console.error('Failed to create WebSocket:', error);
@@ -1303,13 +1587,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     sendResponse({ success: ok, lastError: lastErrorMessage });
     return false;
   }
-  
+
   if (msg?.cmd === 'getStatus') {
     const connected = ws && ws.readyState === WebSocket.OPEN;
     sendResponse({ status: connected ? 'connected' : 'disconnected', lastError: lastErrorMessage, url: serverUrl, controlState });
     return false;
   }
-  
+
   if (msg?.cmd === 'disconnect') {
     if (ws) {
       ws.close();
@@ -1322,19 +1606,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     sendResponse({ success: true });
     return false;
   }
-  
+
   if (msg?.cmd === 'control_action') {
     // Messages from popup are human-initiated
     handleControlAction(msg.action, 'human');
     sendResponse({ success: true });
     return false;
   }
-  
+
   if (msg?.cmd === 'getAuditLog') {
     sendResponse({ auditLog });
     return false;
   }
-  
+
   if (msg?.cmd === 'clearAuditLog') {
     clearAuditLog();
     sendResponse({ success: true });

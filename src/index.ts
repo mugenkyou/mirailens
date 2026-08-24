@@ -48,6 +48,8 @@ const snapshotTools: Tool[] = [
   control.pause_agent,
   control.resume_agent,
   control.stop_agent,
+  control.get_policy,
+  control.set_policy,
 ];
 
 const resources: Resource[] = [];
