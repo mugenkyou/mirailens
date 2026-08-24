@@ -6,217 +6,698 @@
     <title>MiraiLens Settings</title>
     <link rel="stylesheet" href="style.css" />
     <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
       body {
-        max-width: 760px;
-        margin: 40px auto;
-        padding: 0 24px;
+        margin: 0;
+        padding: 40px 0;
+        max-width: none;
+        min-width: 0;
         background-color: #050505;
         color: #F2F2F2;
+        font-family: 'Inter', -apple-system, sans-serif;
+        font-size: 13px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
       }
+
       .settings-container {
+        max-width: 760px;
+        width: calc(100% - 40px);
+        margin: 0 auto;
         display: flex;
         flex-direction: column;
-        gap: 24px;
       }
+
+      /* Navigation & Header */
+      .nav-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        width: 100%;
+        margin-bottom: 24px;
+      }
+
+      .nav-back {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        font-weight: 500;
+        color: #9A9A9A;
+        text-decoration: none;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        transition: color 150ms ease;
+      }
+
+      .nav-back:hover {
+        color: #F2F2F2;
+      }
+
+      .version-badge {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 10px;
+        color: #666666;
+        background-color: #0A0A0A;
+        border: 1px solid #1C1C1C;
+        padding: 2px 8px;
+        border-radius: 12px;
+      }
+
       .settings-header {
         display: flex;
         flex-direction: column;
-        gap: 4px;
-        border-bottom: 1px solid #1C1C1C;
-        padding-bottom: 16px;
+        gap: 6px;
+        margin-bottom: 16px;
+        width: 100%;
       }
-      .settings-brand-link {
-        font-size: 16px;
+
+      .brand-logo {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 18px;
         font-weight: 700;
-        letter-spacing: 1px;
+        letter-spacing: 1.5px;
         color: #F2F2F2;
         text-decoration: none;
         text-transform: uppercase;
         display: inline-block;
         transition: color 150ms ease;
+        width: fit-content;
       }
-      .settings-brand-link:hover {
+
+      .brand-logo:hover {
         color: #B6FF00;
       }
+
       .settings-title {
-        font-size: 20px;
-        font-weight: 700;
-        margin: 4px 0 0 0;
+        font-size: 24px;
+        font-weight: 600;
+        margin: 8px 0 0 0;
         color: #F2F2F2;
+        letter-spacing: -0.5px;
       }
+
       .settings-description {
         font-size: 12px;
         color: #9A9A9A;
       }
+
+      /* Sections Layout */
       .settings-section {
+        border-top: 1px solid #1C1C1C;
+        padding-top: 40px;
+        margin-top: 24px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .section-header {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 24px;
+      }
+
+      .section-title {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        color: #9A9A9A;
+        text-transform: uppercase;
+        margin: 0;
+      }
+
+      .section-description {
+        font-size: 12px;
+        color: #666666;
+      }
+
+      /* Settings Group & Rows */
+      .settings-group {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        width: 100%;
+      }
+
+      .setting-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 24px;
+      }
+
+      .setting-info {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        max-width: 520px;
+      }
+
+      .setting-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: #F2F2F2;
+      }
+
+      .setting-help {
+        font-size: 12px;
+        color: #9A9A9A;
+        line-height: 1.5;
+      }
+
+      /* Custom Checkbox Switch */
+      .switch-container {
+        position: relative;
+        display: inline-block;
+        width: 38px;
+        height: 20px;
+        flex-shrink: 0;
+      }
+
+      .switch-container input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #101010;
+        border: 1px solid #1C1C1C;
+        transition: .2s ease;
+        border-radius: 20px;
+      }
+
+      .slider:before {
+        position: absolute;
+        content: "";
+        height: 12px;
+        width: 12px;
+        left: 3px;
+        bottom: 3px;
+        background-color: #9A9A9A;
+        transition: .2s ease;
+        border-radius: 50%;
+      }
+
+      input:checked + .slider {
+        background-color: #B6FF00;
+        border-color: #B6FF00;
+      }
+
+      input:checked + .slider:before {
+        transform: translateX(18px);
+        background-color: #050505;
+      }
+
+      input:focus-visible + .slider {
+        border-color: #B6FF00;
+        box-shadow: 0 0 0 2px rgba(182, 255, 0, 0.2);
+      }
+
+      /* Custom Policy Selector Block */
+      .policy-selector-block {
         display: flex;
         flex-direction: column;
         gap: 12px;
+        width: 100%;
+        margin-top: 12px;
       }
-      .settings-group {
-        background-color: #0A0A0A;
-        border: 1px solid #1C1C1C;
-        border-radius: 6px;
-        padding: 16px;
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-      }
-      .setting-item-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        border-bottom: 1px solid #1C1C1C;
-        padding-bottom: 16px;
-      }
-      .setting-item-row:last-child {
-        border-bottom: none;
-        padding-bottom: 0;
-      }
-      .setting-item-col {
+
+      .policy-dropdown-row {
         display: flex;
         flex-direction: column;
         gap: 8px;
-        border-bottom: 1px solid #1C1C1C;
-        padding-bottom: 16px;
       }
-      .setting-item-col:last-child {
-        border-bottom: none;
-        padding-bottom: 0;
-      }
-      .setting-label {
-        font-size: 12px;
+
+      .dropdown-label {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 10px;
         font-weight: 600;
-        color: #F2F2F2;
-        text-transform: uppercase;
+        color: #666666;
         letter-spacing: 0.5px;
+        text-transform: uppercase;
       }
-      .setting-info {
+
+      .custom-select-wrapper {
+        position: relative;
+        width: 240px;
+      }
+
+      .custom-select {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 100%;
+        height: 38px;
+        background-color: #101010;
+        border: 1px solid #1C1C1C;
+        color: #F2F2F2;
+        border-radius: 6px;
+        font-family: 'IBM Plex Mono', monospace;
         font-size: 11px;
-        color: #9A9A9A;
-        margin-top: 2px;
+        font-weight: 600;
+        padding: 0 28px 0 12px;
+        outline: none;
+        cursor: pointer;
+        box-sizing: border-box;
+        transition: border-color 150ms ease, box-shadow 150ms ease;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'><path fill='%239A9A9A' d='M0 2l4 4 4-4z'/></svg>");
+        background-repeat: no-repeat;
+        background-position: right 10px center;
       }
-      .input-wrapper {
+
+      .custom-select:focus {
+        border-color: #B6FF00;
+      }
+
+      .policy-explanation-text {
+        font-size: 12px;
+        color: #9A9A9A;
+        background-color: #0A0A0A;
+        padding: 8px 12px;
+        border-radius: 6px;
+        border-left: 2px solid #B6FF00;
+        max-width: 520px;
+      }
+
+      /* Domain Chips Management Component */
+      .domain-config-box {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        width: 100%;
+      }
+
+      .domain-chips-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        min-height: 28px;
+      }
+
+      .domain-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background-color: #101010;
+        border: 1px solid #1C1C1C;
+        border-radius: 4px;
+        padding: 4px 8px;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        color: #F2F2F2;
+      }
+
+      .domain-chip.blocked .status-dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background-color: #FF5555;
+      }
+
+      .domain-chip.trusted .status-dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background-color: #B6FF00;
+      }
+
+      .domain-chip-remove {
+        background: none;
+        border: none;
+        color: #666666;
+        cursor: pointer;
+        padding: 0 2px;
+        font-size: 11px;
+        transition: color 150ms ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .domain-chip-remove:hover {
+        color: #FF5555;
+      }
+
+      .domain-input-row {
         display: flex;
         gap: 8px;
         width: 100%;
+        max-width: 320px;
+        margin-top: 4px;
       }
-      .info-box {
-        font-size: 11px;
-        color: #9A9A9A;
-        line-height: 1.5;
-        padding: 12px;
+
+      .custom-input {
+        flex: 1;
+        min-width: 0;
+        height: 38px;
+        background-color: #0A0A0A;
+        border: 1px solid #1C1C1C;
+        color: #F2F2F2;
+        border-radius: 6px;
+        font-size: 12px;
+        padding: 0 12px;
+        outline: none;
+        box-sizing: border-box;
+        transition: border-color 150ms ease;
+      }
+
+      .custom-input:focus {
+        border-color: #B6FF00;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: auto;
+        height: 38px;
         background-color: #101010;
         border: 1px solid #1C1C1C;
+        color: #9A9A9A;
         border-radius: 6px;
-      }
-      .success-toast {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background-color: #101010;
-        border: 1px solid #B6FF00;
-        color: #B6FF00;
-        padding: 8px 16px;
-        border-radius: 4px;
-        font-size: 11px;
         font-family: 'IBM Plex Mono', monospace;
-        opacity: 0;
-        transition: opacity 300ms ease;
-        pointer-events: none;
+        font-size: 11px;
+        font-weight: 500;
+        padding: 0 16px;
+        cursor: pointer;
+        transition: all 150ms ease;
+        flex-shrink: 0;
+        box-sizing: border-box;
       }
-      .success-toast.show {
+
+      .btn:hover {
+        background-color: #151815;
+        border-color: #2A2A2A;
+        color: #F2F2F2;
+      }
+
+      .btn-primary {
+        border-color: #8AC700;
+        color: #F2F2F2;
+      }
+
+      .btn-primary:hover {
+        background-color: #B6FF00;
+        color: #050505;
+        border-color: #B6FF00;
+      }
+
+      /* Indicators and statuses */
+      .status-pill {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        padding: 4px 8px;
+        border-radius: 4px;
+        width: fit-content;
+        margin-top: 4px;
+      }
+
+      .status-pill.active {
+        color: #B6FF00;
+        background-color: rgba(182, 255, 0, 0.05);
+        border: 1px solid rgba(182, 255, 0, 0.15);
+      }
+
+      .status-pill.inactive {
+        color: #666666;
+        background-color: rgba(28, 28, 28, 0.2);
+        border: 1px solid #1C1C1C;
+      }
+
+      /* Security Info Card */
+      .info-card {
+        background-color: #0A0A0A;
+        border: 1px solid #1C1C1C;
+        border-radius: 8px;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-width: 600px;
+      }
+
+      .info-card-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #F2F2F2;
+      }
+
+      .info-card-text {
+        font-size: 12px;
+        color: #9A9A9A;
+        line-height: 1.6;
+      }
+
+      .threat-link {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        font-weight: 600;
+        color: #B6FF00;
+        text-decoration: none;
+        margin-top: 4px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        transition: color 150ms ease;
+        width: fit-content;
+      }
+
+      .threat-link:hover {
+        color: #8AC700;
+      }
+
+      /* Save Toast Feedback */
+      .toast-container {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        pointer-events: none;
+        z-index: 1000;
+      }
+
+      .toast-msg {
+        background-color: #050505;
+        border: 1px solid #1C1C1C;
+        color: #B6FF00;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 8px 16px;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        opacity: 0;
+        transform: translateY(10px);
+        transition: opacity 200ms ease, transform 200ms ease;
+      }
+
+      .toast-msg.show {
         opacity: 1;
+        transform: translateY(0);
+        border-color: #B6FF00;
+      }
+
+      /* Responsive layout modifications */
+      @media (max-width: 620px) {
+        .setting-row {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 16px;
+        }
+
+        .switch-container {
+          align-self: flex-start;
+        }
+
+        .policy-dropdown-row {
+          width: 100%;
+        }
+
+        .custom-select-wrapper {
+          width: 100%;
+        }
+
+        .domain-input-row {
+          max-width: none;
+        }
       }
     </style>
   </head>
   <body>
     <div class="settings-container">
+      <!-- Navigation -->
+      <div class="nav-bar">
+        <a href="https://mirailens.vercel.app/" class="nav-back">← MiraiLens</a>
+        <span class="version-badge">v1.2.0</span>
+      </div>
+
+      <!-- Header -->
       <div class="settings-header">
-        <a href="https://mirailens.vercel.app/" target="_blank" class="settings-brand-link" id="brand-link">MIRAILENS</a>
+        <a href="https://mirailens.vercel.app/" target="_blank" class="brand-logo">MIRAILENS</a>
         <h1 class="settings-title">Settings</h1>
-        <div class="settings-description">Configure browser behavior and security policies.</div>
+        <div class="settings-description">Configure browser-action safety policies and local connection parameters.</div>
       </div>
 
-      <!-- SECTION 1: POLICY -->
+      <!-- Section 1: Policy -->
       <div class="settings-section">
-        <div class="section-title">POLICY</div>
+        <div class="section-header">
+          <h2 class="section-title">POLICY</h2>
+          <div class="section-description">Control how MiraiLens handles browser actions.</div>
+        </div>
         <div class="settings-group">
-          <div class="setting-item-row">
-            <div>
+          <!-- Draft Only Mode Row -->
+          <div class="setting-row">
+            <div class="setting-info">
               <div class="setting-label">DRAFT-ONLY MODE</div>
-              <div class="setting-info">Prevent form submission when executing browser actions.</div>
+              <div class="setting-help">Prevent forms from submitting when MiraiLens triggers clicks or inputs, while still allowing data-filling.</div>
             </div>
-            <input type="checkbox" id="policy-draft-only" />
+            <label class="switch-container">
+              <input type="checkbox" id="policy-draft-only" aria-label="Draft-Only Mode" />
+              <span class="slider"></span>
+            </label>
           </div>
-          <div class="setting-item-row">
-            <div>
+
+          <!-- Sensitive Fields Row -->
+          <div class="setting-row">
+            <div class="setting-info" style="max-width: none; width: 100%;">
               <div class="setting-label">SENSITIVE FIELDS</div>
-              <div class="setting-info">Default handling for sensitive fields.</div>
+              <div class="setting-help">Default handling rules when automation interacts with sensitive fields (passwords, CVV, payment fields).</div>
+              <div class="policy-selector-block">
+                <div class="policy-dropdown-row">
+                  <span class="dropdown-label">PROTECTION MODE</span>
+                  <div class="custom-select-wrapper">
+                    <select id="policy-sensitive-fields" class="custom-select" aria-label="Sensitive Fields Protection Mode">
+                      <option value="ALWAYS_ASK">ALWAYS ASK</option>
+                      <option value="ALWAYS_DENY">ALWAYS DENY</option>
+                    </select>
+                  </div>
+                </div>
+                <div id="policy-explanation" class="policy-explanation-text">
+                  Ask for approval before interacting with sensitive fields.
+                </div>
+              </div>
             </div>
-            <select id="policy-sensitive-fields">
-              <option value="ALWAYS_ASK">ALWAYS ASK</option>
-              <option value="ALWAYS_DENY">ALWAYS DENY</option>
-            </select>
+          </div>
+
+          <!-- Policy enforced state pill -->
+          <div class="status-pill active">
+            <span>●</span> POLICY ENFORCED
           </div>
         </div>
       </div>
 
-      <!-- SECTION 2: BLOCKED DOMAINS -->
+      <!-- Section 2: Domains -->
       <div class="settings-section">
-        <div class="section-title">BLOCKED DOMAINS</div>
+        <div class="section-header">
+          <h2 class="section-title">DOMAINS</h2>
+          <div class="section-description">Manage access permissions for specific target websites.</div>
+        </div>
         <div class="settings-group">
-          <div class="setting-item-col">
-            <div>
-              <div class="setting-label">BLOCKED DOMAINS (comma-separated)</div>
-              <div class="setting-info">Domains MiraiLens must never interact with.</div>
+          <!-- Blocked Domains Row -->
+          <div class="setting-row">
+            <div class="setting-info" style="max-width: none; width: 100%;">
+              <div class="setting-label">BLOCKED DOMAINS</div>
+              <div class="setting-help">Browser automation will be immediately rejected and blocked on these hostnames.</div>
+              <div class="domain-config-box" style="margin-top: 12px;">
+                <div id="blocked-domains-list" class="domain-chips-list">
+                  <!-- Rendered dynamically -->
+                </div>
+                <div class="domain-input-row">
+                  <input type="text" id="input-add-blocked" class="custom-input" placeholder="e.g. attacker.com" aria-label="Add Blocked Domain" />
+                  <button id="btn-add-blocked" class="btn">Add</button>
+                </div>
+              </div>
             </div>
-            <input type="text" id="policy-blocked-domains" placeholder="attacker.com, evil.com" />
+          </div>
+
+          <!-- Trusted Domains Row -->
+          <div class="setting-row">
+            <div class="setting-info" style="max-width: none; width: 100%;">
+              <div class="setting-label">TRUSTED DOMAINS</div>
+              <div class="setting-help">List of domains explicitly authorized to perform browser automation.</div>
+              <div class="domain-config-box" style="margin-top: 12px;">
+                <div id="trusted-domains-list" class="domain-chips-list">
+                  <!-- Rendered dynamically -->
+                </div>
+                <div class="domain-input-row">
+                  <input type="text" id="input-add-trusted" class="custom-input" placeholder="e.g. localhost" aria-label="Add Trusted Domain" />
+                  <button id="btn-add-trusted" class="btn">Add</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-description" style="color: #666; font-size: 11px; margin-top: 8px;">
+            Domain policies are evaluated by the extension before browser actions are executed.
           </div>
         </div>
       </div>
 
-      <!-- SECTION 3: TRUSTED DOMAINS -->
+      <!-- Section 3: Connection -->
       <div class="settings-section">
-        <div class="section-title">TRUSTED DOMAINS</div>
+        <div class="section-header">
+          <h2 class="section-title">CONNECTION</h2>
+          <div class="section-description">Configure server endpoints used by the background agent.</div>
+        </div>
         <div class="settings-group">
-          <div class="setting-item-col">
-            <div>
-              <div class="setting-label">TRUSTED DOMAINS (comma-separated)</div>
-              <div class="setting-info">Domains explicitly trusted for browser automation.</div>
+          <div class="setting-row">
+            <div class="setting-info" style="max-width: none; width: 100%;">
+              <div class="setting-label">WEBSOCKET SERVER URL</div>
+              <div class="setting-help">WebSocket endpoint location where the local MCP server is running.</div>
+              <div class="domain-config-box" style="margin-top: 12px;">
+                <div class="domain-input-row" style="max-width: 480px;">
+                  <input type="text" id="connection-server-url" class="custom-input" placeholder="ws://127.0.0.1:29100" style="font-family: 'IBM Plex Mono', monospace;" aria-label="WebSocket Server URL" />
+                  <button id="btn-save-connection" class="btn btn-primary">Save</button>
+                </div>
+              </div>
             </div>
-            <input type="text" id="policy-trusted-domains" placeholder="localhost, 127.0.0.1" />
+          </div>
+
+          <!-- Connection state pill -->
+          <div id="connection-status-pill" class="status-pill inactive">
+            <span>●</span> DISCONNECTED
           </div>
         </div>
       </div>
 
-      <!-- SECTION 4: CONNECTION -->
-      <div class="settings-section">
-        <div class="section-title">CONNECTION</div>
-        <div class="settings-group">
-          <div class="setting-item-col">
-            <div>
-              <div class="setting-label">MCP SERVER ENDPOINT</div>
-              <div class="setting-info">The WebSocket URL used to connect to the MiraiLens MCP server.</div>
-            </div>
-            <div class="input-wrapper">
-              <input type="text" id="connection-server-url" placeholder="ws://127.0.0.1:29100" />
-              <button id="btn-save-connection" class="btn btn-secondary" style="width: auto; height: 34px; line-height: 32px; margin: 0; padding: 0 16px;">Save</button>
-            </div>
-          </div>
+      <!-- Section 4: Security Info -->
+      <div class="settings-section" style="margin-bottom: 48px;">
+        <div class="section-header">
+          <h2 class="section-title">SECURITY</h2>
+          <div class="section-description">Extension-enforced security boundaries and models.</div>
         </div>
-      </div>
-
-      <!-- SECTION 5: SECURITY -->
-      <div class="settings-section">
-        <div class="section-title">SECURITY</div>
-        <div class="info-box">
-          MiraiLens evaluates browser actions against extension-enforced policy before execution. Action previews and approvals are bound to single-use verification tokens to prevent replay or spoofing attacks.
+        <div class="info-card">
+          <div class="info-card-title">EXTENSION-ENFORCED POLICY</div>
+          <div class="info-card-text">
+            MiraiLens evaluates browser actions against configured policy before execution. The extension remains the enforcement boundary.
+          </div>
+          <a href="https://github.com/mugenkyou/mcp-server-mirailens/blob/main/threat_model.md" target="_blank" class="threat-link">View threat model →</a>
         </div>
       </div>
     </div>
 
-    <div id="toast" class="success-toast">SETTINGS SAVED</div>
+    <!-- Toast Notification Container -->
+    <div class="toast-container">
+      <div id="toast" class="toast-msg">
+        <span>✓</span> Policy updated
+      </div>
+    </div>
 
     <script src="options.js"></script>
   </body>
