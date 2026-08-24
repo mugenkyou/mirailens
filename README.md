@@ -7,7 +7,7 @@
 [![CI Status](https://github.com/mugenkyou/mcp-server-mirailens/actions/workflows/ci.yml/badge.svg)](https://github.com/mugenkyou/mcp-server-mirailens/actions/workflows/ci.yml)
 [![Protocol Version](https://img.shields.io/badge/Protocol-1.0-orange.svg)](#protocol-compatibility-policy)
 
-[Website](https://mirailens.io) | [Documentation](https://github.com/mugenkyou/mcp-server-mirailens#readme) | [Security](SECURITY.md) | [Architecture](docs/architecture.md) | [Developers](CONTRIBUTING.md) | [GitHub](https://github.com/mugenkyou/mcp-server-mirailens) | [npm](https://www.npmjs.com/package/mirailens)
+[Website](https://mirailens.vercel.app) | [Documentation](https://github.com/mugenkyou/mcp-server-mirailens#readme) | [Security](SECURITY.md) | [Architecture](docs/architecture.md) | [GitHub](https://github.com/mugenkyou/mcp-server-mirailens) | [npm](https://www.npmjs.com/package/mirailens)
 
 ---
 
