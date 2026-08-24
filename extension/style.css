@@ -390,7 +390,8 @@ body {
 
 /* Custom Inputs styling */
 #policy-blocked-domains,
-#policy-trusted-domains {
+#policy-trusted-domains,
+#connection-server-url {
   background-color: #0A0A0A;
   border: 1px solid #1C1C1C;
   color: #F2F2F2;
@@ -404,7 +405,8 @@ body {
 }
 
 #policy-blocked-domains:focus,
-#policy-trusted-domains:focus {
+#policy-trusted-domains:focus,
+#connection-server-url:focus {
   border-color: #B6FF00;
 }
 

@@ -313,13 +313,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   disconnectBtn.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ cmd: 'disconnect' }, (_response) => {
-      chrome.storage.local.remove('connectedTabId', () => {
-        statusText.textContent = 'DISCONNECTED';
-        statusBadge.className = 'connection-status badge-disconnected';
-        refreshUIForActiveTab();
-      });
-    });
+    chrome.runtime.sendMessage({ cmd: 'disconnect' });
   });
 
   function sendControlAction(action) {
