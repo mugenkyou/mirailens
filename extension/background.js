@@ -1393,6 +1393,10 @@ function sendError(id, type, error) {
             }
 
             const panel = document.createElement('div');
+            panel.setAttribute('role', 'alertdialog');
+            panel.setAttribute('aria-modal', 'true');
+            panel.setAttribute('aria-labelledby', 'ml-preview-title');
+            panel.setAttribute('tabindex', '-1');
             panel.style.position = 'absolute';
             panel.style.left = Math.max(0, rect.left) + 'px';
             panel.style.top = Math.max(0, rect.bottom + 10) + 'px';
@@ -1409,6 +1413,7 @@ function sendError(id, type, error) {
             panel.style.color = '#000';
 
             const title = document.createElement('div');
+            title.id = 'ml-preview-title';
             let desc = `AI wants to click this element.`;
             if (actType === 'type') {
               const displayVal = isSensitive ? '[Sensitive Value Masked]' : `"${dls}"`;
@@ -1508,6 +1513,7 @@ function sendError(id, type, error) {
 
             shadow.appendChild(panel);
             document.body.appendChild(overlayHost);
+            btnDeny.focus();
 
             btnDeny.addEventListener('click', () => {
               if (isDeniedOrApproved) return;

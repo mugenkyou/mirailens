@@ -19,7 +19,9 @@
     "url": "https://github.com/mugenkyou/mcp-server-mirailens.git"
   },
   "type": "module",
+  "license": "SEE LICENSE IN LICENSE",
   "bin": {
+    "mirailens": "dist/index.js",
     "mcp-server-mirailens": "dist/index.js"
   },
   "files": [
@@ -31,7 +33,8 @@
     "build": "tsup src/index.ts --format esm && shx chmod +x dist/*.js",
     "prepare": "npm run build",
     "watch": "tsup src/index.ts --format esm --watch",
-    "inspector": "CLIENT_PORT=9001 SERVER_PORT=9002 pnpx @modelcontextprotocol/inspector node dist/index.js"
+    "inspector": "CLIENT_PORT=9001 SERVER_PORT=9002 pnpx @modelcontextprotocol/inspector node dist/index.js",
+    "test": "node --test tests/state-machine.test.js && node --test tests/security.test.js && node --test tests/accountability.test.js && node --test tests/release.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.8.0",
