@@ -1,0 +1,685 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MiraiLens — Audit History</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 40px 0;
+        background-color: #050505;
+        color: #F2F2F2;
+        font-family: 'Inter', -apple-system, sans-serif;
+        font-size: 13px;
+        line-height: 1.6;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .container {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 0 20px;
+        box-sizing: border-box;
+      }
+
+      /* Navigation Header */
+      .nav-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 24px;
+      }
+
+      .back-link {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        color: #B6FF00;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition: opacity 150ms ease;
+      }
+
+      .back-link:hover {
+        opacity: 0.8;
+      }
+
+      .version-tag {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        color: #666666;
+      }
+
+      /* Brand header */
+      header {
+        margin-bottom: 40px;
+      }
+
+      .brand {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 2px;
+        color: #666666;
+        text-transform: uppercase;
+        margin: 0 0 8px 0;
+      }
+
+      h1 {
+        font-size: 24px;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+        color: #F2F2F2;
+        margin: 0 0 8px 0;
+      }
+
+      .subtitle {
+        font-size: 13px;
+        color: #9A9A9A;
+        margin: 0;
+      }
+
+      /* Session summary board */
+      .summary-board {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: 32px;
+      }
+
+      .summary-card {
+        background-color: #0A0A0A;
+        border: 1px solid #1C1C1C;
+        border-radius: 8px;
+        padding: 12px 16px;
+      }
+
+      .summary-label {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 9px;
+        font-weight: 600;
+        color: #666666;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+      }
+
+      .summary-value {
+        font-size: 18px;
+        font-weight: 700;
+        color: #F2F2F2;
+      }
+
+      .summary-value.accent {
+        color: #B6FF00;
+      }
+
+      .summary-value.danger {
+        color: #FF5555;
+      }
+
+      /* Separator */
+      .separator {
+        border-top: 1px solid #1C1C1C;
+        margin-bottom: 32px;
+      }
+
+      /* Filters section */
+      .filter-section {
+        background-color: #0A0A0A;
+        border: 1px solid #1C1C1C;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 24px;
+      }
+
+      .filter-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        align-items: flex-end;
+      }
+
+      .filter-row button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 34px;
+        background-color: #101010;
+        border: 1px solid #1C1C1C;
+        color: #9A9A9A;
+        border-radius: 6px;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        font-weight: 500;
+        padding: 0 16px;
+        cursor: pointer;
+        transition: all 150ms ease;
+        flex-shrink: 0;
+        box-sizing: border-box;
+      }
+
+      .filter-row button:hover {
+        background-color: #151815;
+        border-color: #2A2A2A;
+        color: #F2F2F2;
+      }
+
+      .filter-row button.btn-primary {
+        border-color: #8AC700;
+        color: #F2F2F2;
+      }
+
+      .filter-row button.btn-primary:hover {
+        background-color: #B6FF00;
+        color: #050505;
+        border-color: #B6FF00;
+      }
+
+      .filter-row button.btn-danger {
+        border-color: #FF5555;
+        color: #FF5555;
+      }
+
+      .filter-row button.btn-danger:hover {
+        background-color: #FF5555;
+        color: #FFFFFF;
+        border-color: #FF5555;
+      }
+
+      .filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1;
+        min-width: 140px;
+      }
+
+      .filter-group.domain-search {
+        flex: 2;
+        min-width: 200px;
+      }
+
+      .filter-label {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 9px;
+        font-weight: 600;
+        color: #666666;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .custom-select {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 100%;
+        height: 34px;
+        background-color: #101010;
+        border: 1px solid #1C1C1C;
+        color: #F2F2F2;
+        border-radius: 6px;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        padding: 0 28px 0 10px;
+        outline: none;
+        cursor: pointer;
+        box-sizing: border-box;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'><path fill='%239A9A9A' d='M0 2l4 4 4-4z'/></svg>");
+        background-repeat: no-repeat;
+        background-position: right 10px center;
+      }
+
+      .custom-select:focus {
+        border-color: #B6FF00;
+      }
+
+      .custom-input {
+        background-color: #101010;
+        border: 1px solid #1C1C1C;
+        color: #F2F2F2;
+        border-radius: 6px;
+        font-size: 12px;
+        height: 34px;
+        padding: 0 10px;
+        outline: none;
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      .custom-input:focus {
+        border-color: #B6FF00;
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 34px;
+        background-color: #101010;
+        border: 1px solid #1C1C1C;
+        color: #9A9A9A;
+        border-radius: 6px;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        font-weight: 500;
+        padding: 0 16px;
+        cursor: pointer;
+        transition: all 150ms ease;
+        flex-shrink: 0;
+        box-sizing: border-box;
+      }
+
+      .btn:hover {
+        background-color: #151815;
+        border-color: #2A2A2A;
+        color: #F2F2F2;
+      }
+
+      /* History List / Table styling */
+      .history-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 16px;
+      }
+
+      .history-table th {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 9px;
+        font-weight: 600;
+        color: #666666;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        text-align: left;
+        padding: 10px 12px;
+        border-bottom: 1px solid #1C1C1C;
+      }
+
+      .history-table td {
+        padding: 12px;
+        border-bottom: 1px solid #1C1C1C;
+        font-size: 12px;
+        color: #F2F2F2;
+      }
+
+      .row-clickable {
+        cursor: pointer;
+        transition: background-color 150ms ease;
+      }
+
+      .row-clickable:hover {
+        background-color: #0A0A0A;
+      }
+
+      .time-col {
+        font-family: 'IBM Plex Mono', monospace;
+        color: #666666;
+        width: 70px;
+      }
+
+      .badge {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 9px;
+        font-weight: 600;
+        padding: 2px 6px;
+        border-radius: 4px;
+        text-transform: uppercase;
+        display: inline-block;
+      }
+
+      .badge-ai {
+        background-color: #101510;
+        color: #B6FF00;
+        border: 1px solid #203520;
+      }
+
+      .badge-human {
+        background-color: #151515;
+        color: #9A9A9A;
+        border: 1px solid #2A2A2A;
+      }
+
+      .badge-verified {
+        background-color: #101510;
+        color: #B6FF00;
+      }
+
+      .badge-unverified {
+        background-color: #151510;
+        color: #E7C85A;
+      }
+
+      .badge-failed {
+        background-color: #201010;
+        color: #FF5555;
+      }
+
+      .badge-blocked {
+        background-color: #201010;
+        color: #FF5555;
+        border: 1px dashed #FF5555;
+      }
+
+      .badge-cancelled {
+        background-color: #151515;
+        color: #666666;
+      }
+
+      .action-col {
+        font-family: 'IBM Plex Mono', monospace;
+        font-weight: 500;
+      }
+
+      .target-col {
+        max-width: 220px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .empty-state {
+        text-align: center;
+        padding: 48px 0;
+        color: #666666;
+        font-size: 13px;
+        background-color: #0A0A0A;
+        border: 1px dashed #1C1C1C;
+        border-radius: 8px;
+        margin-top: 16px;
+      }
+
+      /* Modal Popups styling */
+      .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(5, 5, 5, 0.9);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        box-sizing: border-box;
+      }
+
+      .modal.show {
+        display: flex;
+      }
+
+      .modal-content {
+        background-color: #0A0A0A;
+        border: 1px solid #1C1C1C;
+        border-radius: 12px;
+        width: 100%;
+        max-width: 520px;
+        padding: 24px;
+        box-sizing: border-box;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 20px;
+      }
+
+      .modal-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0;
+      }
+
+      .modal-close {
+        background: none;
+        border: none;
+        color: #666666;
+        cursor: pointer;
+        padding: 4px;
+        transition: color 150ms ease;
+      }
+
+      .modal-close:hover {
+        color: #F2F2F2;
+      }
+
+      .details-grid {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 12px 16px;
+        margin-bottom: 24px;
+      }
+
+      .details-label {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 10px;
+        font-weight: 600;
+        color: #666666;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .details-val {
+        color: #F2F2F2;
+        word-break: break-all;
+      }
+
+      .details-val.mono {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+      }
+
+      .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        border-top: 1px solid #1C1C1C;
+        padding-top: 16px;
+        margin-top: 20px;
+      }
+
+      /* Notification Toast */
+      .toast {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        background-color: #101010;
+        border: 1px solid #B6FF00;
+        color: #F2F2F2;
+        padding: 12px 20px;
+        border-radius: 8px;
+        z-index: 1000;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        opacity: 0;
+        transform: translateY(10px);
+        transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+        pointer-events: none;
+      }
+
+      .toast.show {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      /* Pagination */
+      .pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 20px;
+        color: #666666;
+        font-size: 12px;
+      }
+
+      .pagination-controls {
+        display: flex;
+        gap: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Navigation -->
+      <div class="nav-header">
+        <a href="popup.html" class="back-link">← MiraiLens popup</a>
+        <span class="version-tag">v1.2.0</span>
+      </div>
+
+      <!-- Main Header -->
+      <header>
+        <div class="brand">MIRAILENS</div>
+        <h1>Audit History & Accountability</h1>
+        <p class="subtitle">Authoritative session log ledger stored locally on your device.</p>
+      </header>
+
+      <!-- Session Summary Board -->
+      <div class="summary-board">
+        <div class="summary-card">
+          <div class="summary-label">AI Actions</div>
+          <div id="summary-ai-actions" class="summary-value">-</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Human Takeovers</div>
+          <div id="summary-human-actions" class="summary-value">-</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Blocked / Denied</div>
+          <div id="summary-blocked-actions" class="summary-value danger">-</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Verified Outcomes</div>
+          <div id="summary-verified-actions" class="summary-value accent">-</div>
+        </div>
+      </div>
+
+      <!-- Filters Section -->
+      <div class="filter-section">
+        <div class="filter-row">
+          <div class="filter-group">
+            <span class="filter-label">Session</span>
+            <select id="filter-session" class="custom-select">
+              <option value="ALL">All Sessions</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">Actor</span>
+            <select id="filter-actor" class="custom-select">
+              <option value="ALL">All Actors</option>
+              <option value="AI">AI Only</option>
+              <option value="HUMAN">Human Only</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">Outcome</span>
+            <select id="filter-outcome" class="custom-select">
+              <option value="ALL">All Outcomes</option>
+              <option value="VERIFIED">Verified</option>
+              <option value="UNVERIFIED_COMPLETE">Unverified Complete</option>
+              <option value="FAILED">Failed</option>
+              <option value="BLOCKED">Blocked</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
+          </div>
+          <div class="filter-group domain-search">
+            <span class="filter-label">Domain Search</span>
+            <input type="text" id="filter-domain" class="custom-input" placeholder="e.g. localhost" />
+          </div>
+          <button id="btn-export" class="btn-primary">Export</button>
+          <button id="btn-clear" class="btn-danger">Clear</button>
+        </div>
+      </div>
+
+      <!-- History Table Container -->
+      <div id="history-container">
+        <table class="history-table" id="history-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Actor</th>
+              <th>Action</th>
+              <th>Target</th>
+              <th>Outcome</th>
+            </tr>
+          </thead>
+          <tbody id="history-tbody">
+            <!-- Dynamic rows -->
+          </tbody>
+        </table>
+        <div id="empty-state" class="empty-state hidden">No matching action entries in local ledger.</div>
+      </div>
+
+      <!-- Pagination block -->
+      <div class="pagination">
+        <span id="pagination-info">Showing 0-0 of 0</span>
+        <div class="pagination-controls">
+          <button id="btn-prev" class="btn">Prev</button>
+          <button id="btn-next" class="btn">Next</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Details Dialog Modal -->
+    <div class="modal" id="details-modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title">Action Ledger Entry</h2>
+          <button class="modal-close" id="modal-close" aria-label="Close dialog">✕</button>
+        </div>
+        <div class="details-grid">
+          <span class="details-label">Action ID</span>
+          <span id="detail-id" class="details-val mono">-</span>
+
+          <span class="details-label">Session ID</span>
+          <span id="detail-session" class="details-val mono">-</span>
+
+          <span class="details-label">Timestamp</span>
+          <span id="detail-time" class="details-val">-</span>
+
+          <span class="details-label">Actor</span>
+          <span id="detail-actor" class="details-val">-</span>
+
+          <span class="details-label">Action Type</span>
+          <span id="detail-type" class="details-val mono">-</span>
+
+          <span class="details-label">Domain</span>
+          <span id="detail-domain" class="details-val">-</span>
+
+          <span class="details-label">Target Selector</span>
+          <span id="detail-target" class="details-val mono">-</span>
+
+          <span class="details-label">Decision Code</span>
+          <span id="detail-decision" class="details-val">-</span>
+
+          <span class="details-label">Outcome State</span>
+          <span id="detail-outcome" class="details-val">-</span>
+
+          <span class="details-label">Verification</span>
+          <span id="detail-verification" class="details-val">-</span>
+
+          <span class="details-label">Undo Status</span>
+          <span id="detail-undo-status" class="details-val">-</span>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-undo" class="btn btn-primary hidden">Undo action</button>
+          <button id="btn-close-modal" class="btn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div class="toast" id="toast">
+      <span id="toast-text">Toast message</span>
+    </div>
+
+    <script src="history.js"></script>
+  </body>
+</html>

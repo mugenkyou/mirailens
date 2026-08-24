@@ -338,7 +338,12 @@ document.addEventListener('DOMContentLoaded', () => {
         window.open(chrome.runtime.getURL('options.html'));
       }
     });
-  }
+  const btnHistory = document.getElementById('btn-history');
+  if (btnHistory) {
+    btnHistory.addEventListener('click', () => {
+      chrome.tabs.create({ url: 'history.html' });
+    });
+  }}
 
   chrome.runtime.onMessage.addListener((message) => {
     if (message?.status) {

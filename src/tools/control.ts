@@ -182,3 +182,32 @@ export const set_policy: Tool = {
     };
   }
 };
+
+export const undo_last: Tool = {
+  schema: baseControlSchema("undo_last", "Revert/undo the last reversible browser action performed by the AI (e.g. restoring a text input's previous state)."),
+  handle: async (context) => {
+    const response = await context.sendSocketMessage("undo_last", {});
+    return {
+      content: [{ type: "text", text: JSON.stringify(response, null, 2) }]
+    };
+  }
+};
+
+export const get_action_history: Tool = {
+  schema: {
+    name: "get_action_history",
+    description: "Retrieve a filtered and bounded list of recent actions executed by MiraiLens.",
+    inputSchema: zodToJsonSchema(z.object({
+      sessionId: z.string().optional(),
+      actor: z.enum(["AI", "HUMAN"]).optional(),
+      domain: z.string().optional(),
+      limit: z.number().max(100).optional(),
+    })),
+  },
+  handle: async (context, args) => {
+    const response = await context.sendSocketMessage("get_action_history", (args || {}) as any);
+    return {
+      content: [{ type: "text", text: JSON.stringify(response, null, 2) }]
+    };
+  }
+};

@@ -6,16 +6,18 @@ const STATES = {
   AGENT_RESUMING: 'AGENT_RESUMING',
   BLOCKED: 'BLOCKED',
   COMPLETED: 'COMPLETED',
-  FAILED: 'FAILED'
+  FAILED: 'FAILED',
+  VERIFYING: 'VERIFYING'
 };
 
 const TRANSITION_MATRIX = {
-  [STATES.IDLE]: [STATES.AGENT_RUNNING, STATES.HUMAN_TAKEOVER, STATES.HUMAN_CONTROLLED, STATES.BLOCKED, STATES.COMPLETED, STATES.FAILED],
-  [STATES.AGENT_RUNNING]: [STATES.IDLE, STATES.HUMAN_TAKEOVER, STATES.HUMAN_CONTROLLED, STATES.BLOCKED, STATES.FAILED],
+  [STATES.IDLE]: [STATES.AGENT_RUNNING, STATES.HUMAN_TAKEOVER, STATES.HUMAN_CONTROLLED, STATES.BLOCKED, STATES.COMPLETED, STATES.FAILED, STATES.VERIFYING],
+  [STATES.AGENT_RUNNING]: [STATES.IDLE, STATES.HUMAN_TAKEOVER, STATES.HUMAN_CONTROLLED, STATES.BLOCKED, STATES.FAILED, STATES.VERIFYING],
   [STATES.HUMAN_TAKEOVER]: [STATES.HUMAN_CONTROLLED, STATES.BLOCKED],
   [STATES.HUMAN_CONTROLLED]: [STATES.AGENT_RESUMING, STATES.BLOCKED],
-  [STATES.AGENT_RESUMING]: [STATES.AGENT_RUNNING, STATES.IDLE, STATES.HUMAN_TAKEOVER, STATES.BLOCKED],
+  [STATES.AGENT_RESUMING]: [STATES.AGENT_RUNNING, STATES.IDLE, STATES.HUMAN_TAKEOVER, STATES.BLOCKED, STATES.VERIFYING],
   [STATES.BLOCKED]: [STATES.AGENT_RESUMING, STATES.IDLE],
+  [STATES.VERIFYING]: [STATES.IDLE, STATES.COMPLETED, STATES.FAILED, STATES.BLOCKED],
   [STATES.COMPLETED]: [STATES.IDLE],
   [STATES.FAILED]: [STATES.IDLE]
 };
@@ -52,6 +54,51 @@ function recordAudit(record) {
 
 function clearAuditLog() {
   auditLog.length = 0;
+}
+
+let currentSessionId = 'sess_init';
+const actionSnapshots = new Map();
+const LEDGER_STORAGE_KEY = 'mirailensLedger';
+
+function getLedger(callback) {
+  chrome.storage.local.get([LEDGER_STORAGE_KEY], (data) => {
+    const ledger = data[LEDGER_STORAGE_KEY] || [];
+    callback(ledger);
+  });
+}
+
+function appendLedger(entry, callback) {
+  getLedger((ledger) => {
+    ledger.push(entry);
+    if (ledger.length > 1000) {
+      ledger.shift();
+    }
+    chrome.storage.local.set({ [LEDGER_STORAGE_KEY]: ledger }, () => {
+      chrome.runtime.sendMessage({ cmd: 'ledgerUpdated', entry });
+      if (callback) callback();
+    });
+  });
+}
+
+function updateLedger(id, updates, callback) {
+  getLedger((ledger) => {
+    let found = false;
+    for (let i = ledger.length - 1; i >= 0; i--) {
+      if (ledger[i].id === id) {
+        ledger[i] = { ...ledger[i], ...updates };
+        found = true;
+        break;
+      }
+    }
+    if (found) {
+      chrome.storage.local.set({ [LEDGER_STORAGE_KEY]: ledger }, () => {
+        chrome.runtime.sendMessage({ cmd: 'ledgerUpdated', id });
+        if (callback) callback();
+      });
+    } else {
+      if (callback) callback();
+    }
+  });
 }
 
 let isEmergencyStop = false;
@@ -323,30 +370,68 @@ function abortActiveAction(reason) {
 }
 
 function handleControlAction(action, source = 'ai') {
+  const actor = (source === 'human' || source === 'human_implicit') ? 'HUMAN' : 'AI';
+
+  const recordControlEntry = (actType, targetText, success = true, reason = '') => {
+    tabsQuery({ active: true, currentWindow: true }).then((tabs) => {
+      const tab = tabs[0];
+      let currentDomain = 'localhost';
+      if (tab && tab.url) {
+        try { currentDomain = new URL(tab.url).hostname; } catch(_) {}
+      }
+      appendLedger({
+        id: 'ctrl_' + crypto.randomUUID(),
+        sessionId: currentSessionId,
+        timestamp: Date.now(),
+        actor,
+        actionType: actType,
+        target: targetText,
+        domain: currentDomain,
+        decision: 'APPROVED',
+        state: success ? 'COMPLETED' : 'FAILED',
+        outcome: success ? 'VERIFIED' : 'FAILED',
+        reversible: false,
+        verification: success ? { outcome: 'VERIFIED', reasons: ['State transitioned successfully.'] } : null,
+        snapshotId: null,
+        reason
+      });
+    });
+  };
+
   if (action === 'EMERGENCY_STOP') {
     setEmergencyStop(true);
     if (controlState === STATES.BLOCKED) {
+      recordControlEntry('emergency_stop', 'Emergency stop activated');
       return { success: true };
     }
-    return transitionTo(STATES.BLOCKED, source);
+    const res = transitionTo(STATES.BLOCKED, source);
+    recordControlEntry('emergency_stop', 'Emergency stop activated', res.success, res.reason || '');
+    return res;
   }
 
   if (action === 'PAUSE') {
     setPausedBy(source);
     if (controlState === STATES.BLOCKED) {
+      recordControlEntry('pause', 'AI paused');
       return { success: true };
     }
-    return transitionTo(STATES.BLOCKED, source);
+    const res = transitionTo(STATES.BLOCKED, source);
+    recordControlEntry('pause', 'AI paused', res.success, res.reason || '');
+    return res;
   }
 
   if (action === 'TAKE_CONTROL') {
     if (controlState === STATES.HUMAN_CONTROLLED) {
+      recordControlEntry('take_control', 'Human took control');
       return { success: true };
     }
     const res = transitionTo(STATES.HUMAN_TAKEOVER, source);
     if (res.success) {
-      return transitionTo(STATES.HUMAN_CONTROLLED, source);
+      const res2 = transitionTo(STATES.HUMAN_CONTROLLED, source);
+      recordControlEntry('take_control', 'Human took control', res2.success, res2.reason || '');
+      return res2;
     }
+    recordControlEntry('take_control', 'Human took control', false, res.reason || '');
     return res;
   }
 
@@ -355,12 +440,16 @@ function handleControlAction(action, source = 'ai') {
       return { success: false, reason: "Return control must be authorized by human." };
     }
     if (controlState === STATES.IDLE || controlState === STATES.AGENT_RUNNING) {
+      recordControlEntry('resume', 'AI resumed');
       return { success: true };
     }
     const res = transitionTo(STATES.AGENT_RESUMING, source);
     if (res.success) {
-      return transitionTo(STATES.IDLE, source);
+      const res2 = transitionTo(STATES.IDLE, source);
+      recordControlEntry('resume', 'AI resumed', res2.success, res2.reason || '');
+      return res2;
     }
+    recordControlEntry('resume', 'AI resumed', false, res.reason || '');
     return res;
   }
 
@@ -378,13 +467,17 @@ function handleControlAction(action, source = 'ai') {
     }
 
     if (controlState === STATES.IDLE || controlState === STATES.AGENT_RUNNING) {
+      recordControlEntry('resume', 'AI resumed');
       return { success: true };
     }
     const res = transitionTo(STATES.AGENT_RESUMING, source);
     if (res.success) {
       setPausedBy(null);
-      return transitionTo(STATES.IDLE, source);
+      const res2 = transitionTo(STATES.IDLE, source);
+      recordControlEntry('resume', 'AI resumed', res2.success, res2.reason || '');
+      return res2;
     }
+    recordControlEntry('resume', 'AI resumed', false, res.reason || '');
     return res;
   }
 
@@ -397,7 +490,9 @@ function handleControlAction(action, source = 'ai') {
     }
     setEmergencyStop(false);
     setPausedBy(null);
-    return transitionTo(STATES.IDLE, source);
+    const res = transitionTo(STATES.IDLE, source);
+    recordControlEntry('reset_stop', 'Emergency stop reset', res.success, res.reason || '');
+    return res;
   }
 
   return { success: false, reason: `Unknown control action: ${action}` };
@@ -541,26 +636,55 @@ async function captureActionState(tabId, selector) {
   }
 }
 
-function verifyActionOutcome(before, after) {
+function verifyActionOutcome(before, after, actionType, payload, isSensitive) {
   if (!before || !after) {
-    return { outcome: 'UNKNOWN', before, after, reasons: ['Unable to verify post-action state.'] };
+    return { outcome: 'UNVERIFIED_COMPLETE', before, after, reasons: ['Unable to verify post-action state.'] };
   }
 
   const reasons = [];
-  let outcome = 'UNKNOWN';
+  let outcome = 'UNVERIFIED_COMPLETE';
+
+  if (actionType === 'browser_navigate') {
+    const expectedUrl = payload?.url;
+    if (expectedUrl && after.url) {
+      const match = after.url.includes(expectedUrl) || expectedUrl.includes(after.url);
+      if (match) {
+        reasons.push(`URL matches expected: ${after.url}`);
+        return { outcome: 'VERIFIED', before, after, reasons };
+      } else {
+        reasons.push(`URL mismatch. Expected: ${expectedUrl}, Got: ${after.url}`);
+        return { outcome: 'FAILED', before, after, reasons };
+      }
+    }
+  }
+
+  if (isSensitive) {
+    reasons.push('Sensitive field value verification skipped for security.');
+    return { outcome: 'UNVERIFIED_COMPLETE', before, after, reasons };
+  }
 
   if (before.url !== after.url) {
     reasons.push(`URL changed from ${before.url} to ${after.url}`);
-    return { outcome: 'EXPECTED_CHANGE', before, after, reasons };
+    return { outcome: 'VERIFIED', before, after, reasons };
   }
 
   if (before.targetExists && !after.targetExists) {
     reasons.push('Target element disappeared.');
-    return { outcome: 'EXPECTED_CHANGE', before, after, reasons };
+    return { outcome: 'VERIFIED', before, after, reasons };
   }
 
   if (before.targetExists && after.targetExists) {
     let changed = false;
+
+    if (actionType === 'browser_type') {
+      const beforeVal = before.targetAttributes.value || '';
+      const afterVal = after.targetAttributes.value || '';
+      if (beforeVal !== afterVal) {
+        reasons.push(`Input value changed from "${beforeVal}" to "${afterVal}".`);
+        changed = true;
+      }
+    }
+
     if (before.targetText !== after.targetText) {
       reasons.push('Target text changed.');
       changed = true;
@@ -624,6 +748,136 @@ async function handleMCPMessage(message) {
 
     if (type === 'get_policy') {
       sendResponse(id, type, { policy: currentPolicy });
+      return;
+    }
+
+    if (type === 'get_action_history') {
+      const limit = Math.min(100, Math.max(1, payload?.limit || 50));
+      getLedger((ledger) => {
+        let filtered = [...ledger];
+        if (payload?.sessionId) {
+          filtered = filtered.filter(e => e.sessionId === payload.sessionId);
+        }
+        if (payload?.actor) {
+          filtered = filtered.filter(e => e.actor === payload.actor);
+        }
+        if (payload?.domain) {
+          filtered = filtered.filter(e => e.domain && e.domain.includes(payload.domain));
+        }
+        filtered.sort((a, b) => b.timestamp - a.timestamp);
+        const sliced = filtered.slice(0, limit);
+        sendResponse(id, type, { history: sliced });
+      });
+      return;
+    }
+
+    if (type === 'undo_last') {
+      getLedger(async (ledger) => {
+        const reversibleEntries = ledger.filter(e => e.reversible && e.snapshotId);
+        if (reversibleEntries.length === 0) {
+          sendError(id, type, { success: false, reason: "No reversible action found" });
+          return;
+        }
+        const targetEntry = reversibleEntries[reversibleEntries.length - 1];
+        const snap = actionSnapshots.get(targetEntry.snapshotId);
+        if (!snap) {
+          sendError(id, type, { success: false, reason: "Snapshot is stale or unavailable" });
+          return;
+        }
+
+        const tabId = await getActiveTabId();
+        if (!tabId || tabId !== snap.tabId) {
+          sendError(id, type, { success: false, reason: "Active tab does not match the action context" });
+          return;
+        }
+        const tab = await tabsQuery({ active: true, currentWindow: true }).then(t => t[0]);
+        if (!tab || !tab.url) {
+          sendError(id, type, { success: false, reason: "Unable to query active tab URL" });
+          return;
+        }
+        let currentHostname = '';
+        try { currentHostname = new URL(tab.url).hostname; } catch(_) {}
+        let snapHostname = '';
+        try { snapHostname = new URL(snap.url).hostname; } catch(_) {}
+        if (currentHostname !== snapHostname) {
+          sendError(id, type, { success: false, reason: "Active tab URL host does not match snap URL host" });
+          return;
+        }
+
+        const evalResult = evaluatePolicy(currentHostname, 'browser_type', { isSensitiveField: false });
+        if (evalResult.decision === 'ALWAYS_DENY') {
+          sendError(id, type, { success: false, reason: "Policy blocks restoring the value" });
+          return;
+        }
+
+        try {
+          const restored = await exec(tabId, (sel, val) => {
+            const el = document.querySelector(sel);
+            if (el) {
+              el.value = val;
+              el.dispatchEvent(new Event('input', { bubbles: true }));
+              el.dispatchEvent(new Event('change', { bubbles: true }));
+              return true;
+            }
+            return false;
+          }, [snap.selector, snap.previousValue]);
+
+          if (!restored) {
+            sendError(id, type, { success: false, reason: "Element not found on the page" });
+            appendLedger({
+              id: 'undo_' + crypto.randomUUID(),
+              sessionId: currentSessionId,
+              timestamp: Date.now(),
+              actor: 'AI',
+              actionType: 'undo_last',
+              target: snap.selector,
+              domain: currentHostname,
+              decision: 'AUTO',
+              state: 'FAILED',
+              outcome: 'FAILED',
+              reversible: false,
+              verification: null,
+              snapshotId: null,
+              reason: "Element not found during undo execution"
+            });
+            return;
+          }
+
+          await new Promise(r => setTimeout(r, 500));
+          const verifyState = await exec(tabId, (sel) => {
+            const el = document.querySelector(sel);
+            return el ? el.value : null;
+          }, [snap.selector]);
+
+          const success = (verifyState === snap.previousValue);
+          const undoOutcome = success ? 'VERIFIED' : 'UNVERIFIED_COMPLETE';
+
+          updateLedger(targetEntry.id, { reversible: false, snapshotId: null });
+          actionSnapshots.delete(targetEntry.snapshotId);
+
+          const undoEntry = {
+            id: 'undo_' + crypto.randomUUID(),
+            sessionId: currentSessionId,
+            timestamp: Date.now(),
+            actor: 'AI',
+            actionType: 'undo_last',
+            target: snap.selector,
+            domain: currentHostname,
+            decision: 'AUTO',
+            state: 'COMPLETED',
+            outcome: undoOutcome,
+            reversible: false,
+            verification: { outcome: undoOutcome, reasons: [success ? "Restored original value successfully." : "Restore finished but verification mismatch."] },
+            snapshotId: null,
+            reason: ''
+          };
+          appendLedger(undoEntry, () => {
+            sendResponse(id, type, { success, outcome: undoOutcome, restoredValue: snap.previousValue });
+          });
+        } catch(e) {
+          sendError(id, type, { success: false, reason: e.message || String(e) });
+        }
+      });
       return;
     }
 
@@ -695,12 +949,12 @@ async function handleMCPMessage(message) {
     }
 
     const isConsequential = ['browser_click', 'browser_type', 'browser_navigate'].includes(type);
-    const shouldVerify = type === 'browser_click' || type === 'browser_type';
+    const shouldVerify = type === 'browser_click' || type === 'browser_type' || type === 'browser_navigate';
     const rawSelector = payload ? (payload.element || payload.selector) : null;
     const selector = typeof rawSelector === 'string' && rawSelector.trim() ? rawSelector : null;
 
     let props = null;
-    let targetHostname = '';
+    let targetHostname = 'localhost';
     let tabId = null;
 
     if (isConsequential) {
@@ -723,7 +977,7 @@ async function handleMCPMessage(message) {
       }
 
       // Policy Gate Check
-      if (shouldVerify && selector && tabId) {
+      if (['browser_click', 'browser_type'].includes(type) && selector && tabId) {
         props = await inspectElementProperties(tabId, selector);
       }
 
@@ -737,20 +991,60 @@ async function handleMCPMessage(message) {
           message: evalResult.message,
           controlState: STATES.BLOCKED
         });
+
+        const isSensitive = props && props.isSensitiveField;
+        const targetText = isSensitive ? `${selector} [Sensitive Value Masked]` : (selector || payload?.url || '');
+        appendLedger({
+          id: id || crypto.randomUUID(),
+          sessionId: currentSessionId,
+          timestamp: Date.now(),
+          actor: 'AI',
+          actionType: type,
+          target: targetText,
+          domain: targetHostname || 'localhost',
+          decision: 'DENIED',
+          state: STATES.BLOCKED,
+          outcome: 'BLOCKED',
+          reversible: false,
+          verification: null,
+          snapshotId: null,
+          reason: evalResult.reasonCode || 'Policy blocked'
+        });
+
         transitionTo(STATES.BLOCKED, 'policy_engine');
         return;
       }
     }
 
+    // Initialize Ledger Entry
+    const ledgerId = id || crypto.randomUUID();
+    const isSensitive = props && props.isSensitiveField;
+    const targetText = isSensitive ? `${selector} [Sensitive Value Masked]` : (selector || payload?.url || '');
+
+    const initialEntry = {
+      id: ledgerId,
+      sessionId: currentSessionId,
+      timestamp: Date.now(),
+      actor: 'AI',
+      actionType: type,
+      target: targetText,
+      domain: targetHostname || 'localhost',
+      decision: isConsequential ? (evaluatePolicy(targetHostname, type, props).decision === 'AUTO_EXECUTE' ? 'AUTO' : 'APPROVED') : 'AUTO',
+      state: 'REQUESTED',
+      outcome: 'ATTEMPTED',
+      reversible: false,
+      verification: null,
+      snapshotId: null,
+      reason: ''
+    };
+    appendLedger(initialEntry);
+
     let beforeState = null;
     let auditRecord = null;
 
     if (shouldVerify) {
-      const isSensitive = props && props.isSensitiveField;
-      const targetText = isSensitive ? `${selector} [Sensitive Value Masked]` : selector;
-
       auditRecord = {
-        id: crypto.randomUUID(),
+        id: ledgerId,
         timestamp: Date.now(),
         action: type,
         target: targetText,
@@ -765,7 +1059,9 @@ async function handleMCPMessage(message) {
       recordAudit(auditRecord);
       console.log('[Phase6] Audit started');
 
-      if (selector) {
+      if (type === 'browser_navigate') {
+        beforeState = { url: targetHostname, title: '' };
+      } else if (selector) {
         console.log(`[Phase5] Verification enabled: ${type}`);
         console.log('[Phase5] Capturing before state');
         beforeState = await captureActionState(tabId, selector);
@@ -776,14 +1072,29 @@ async function handleMCPMessage(message) {
       console.log(`[Phase5] Verification skipped for: ${type}`);
     }
 
-    // Transition to AGENT_RUNNING if we are IDLE or AGENT_RESUMING
+    let snapshotId = null;
+    if (type === 'browser_type' && !isSensitive && beforeState && beforeState.targetExists) {
+      snapshotId = 'snap_' + crypto.randomUUID();
+      const originalValue = beforeState.targetAttributes.value || '';
+      actionSnapshots.set(snapshotId, {
+        tabId,
+        selector,
+        previousValue: originalValue,
+        url: beforeState.url,
+        timestamp: Date.now()
+      });
+    }
+
     if (controlState === STATES.IDLE || controlState === STATES.AGENT_RESUMING) {
       const transitioned = transitionTo(STATES.AGENT_RUNNING, 'start_action');
       if (!transitioned.success) {
+        updateLedger(ledgerId, { state: 'FAILED', outcome: 'FAILED', reason: transitioned.reason });
         sendError(id, type, { allowed: false, reason: transitioned.reason, controlState });
         return;
       }
     }
+
+    updateLedger(ledgerId, { state: STATES.AGENT_RUNNING });
 
     let actionRejected = false;
     const actionPromise = new Promise(async (resolve, reject) => {
@@ -809,14 +1120,18 @@ async function handleMCPMessage(message) {
       const result = await actionPromise;
       activeAction = null;
 
+      let finalDecision = initialEntry.decision;
+
       if (auditRecord) {
         console.log(`[Phase6] Risk recorded: ${auditRecord.risk}`);
         if (result && result.approved === false) {
            auditRecord.decision = auditRecord.decision !== 'UNKNOWN' ? auditRecord.decision : 'HUMAN_DENIED';
            auditRecord.execution = 'NOT_EXECUTED';
            auditRecord.outcome = 'DENIED';
+           finalDecision = 'DENIED';
         } else if (result !== false) {
            auditRecord.execution = 'EXECUTED';
+           finalDecision = (initialEntry.decision === 'AUTO') ? 'AUTO' : 'APPROVED';
         } else {
            auditRecord.execution = 'NOT_EXECUTED';
         }
@@ -824,20 +1139,43 @@ async function handleMCPMessage(message) {
         console.log(`[Phase6] Execution recorded: ${auditRecord.execution}`);
       }
 
+      if (result && result.approved === false) {
+        updateLedger(ledgerId, {
+          decision: 'DENIED',
+          state: 'FAILED',
+          outcome: 'CANCELLED',
+          reason: result.reason || 'Human denied approval'
+        });
+        if (controlState === STATES.AGENT_RUNNING) {
+          transitionTo(STATES.IDLE, 'finish_action');
+        }
+        sendResponse(id, type, result);
+        return;
+      }
+
+      if (controlState === STATES.AGENT_RUNNING) {
+        transitionTo(STATES.VERIFYING, 'verify_action');
+      }
+      updateLedger(ledgerId, { state: STATES.VERIFYING });
+
       let verification = null;
-      if (shouldVerify && selector) {
+      if (shouldVerify) {
         console.log('[Phase5] Action completed');
-        if (beforeState && result !== false && !(result && result.approved === false)) {
+        if (result !== false) {
           await new Promise(r => setTimeout(r, 1500));
           console.log('[Phase5] Capturing after state');
           const currentTabId = await getActiveTabId();
-          const afterState = await captureActionState(currentTabId, selector);
-          verification = verifyActionOutcome(beforeState, afterState);
+          let afterState = null;
+          if (type === 'browser_navigate') {
+            const currentTab = await tabsQuery({ active: true, currentWindow: true }).then(t => t[0]);
+            afterState = { url: currentTab ? currentTab.url : '', title: currentTab ? currentTab.title : '' };
+          } else if (selector) {
+            afterState = await captureActionState(currentTabId, selector);
+          }
+          verification = verifyActionOutcome(beforeState, afterState, type, payload, isSensitive);
           console.log('[Phase5] Verification outcome:', verification.outcome);
-        } else if (result && result.approved === false) {
-          // Human denied action, do not verify
         } else {
-          verification = { outcome: 'UNKNOWN', reasons: ['Unable to verify post-action state.'] };
+          verification = { outcome: 'UNVERIFIED_COMPLETE', reasons: ['Unable to verify post-action state.'] };
         }
       }
 
@@ -849,7 +1187,19 @@ async function handleMCPMessage(message) {
         console.log(`[Phase6] Outcome recorded: ${auditRecord.outcome}`);
       }
 
-      if (controlState === STATES.AGENT_RUNNING) {
+      const finalOutcome = verification ? verification.outcome : 'UNVERIFIED_COMPLETE';
+      const finalState = (finalOutcome === 'FAILED') ? STATES.FAILED : STATES.COMPLETED;
+
+      updateLedger(ledgerId, {
+        decision: finalDecision,
+        state: finalState,
+        outcome: finalOutcome,
+        reversible: !!snapshotId,
+        snapshotId,
+        verification
+      });
+
+      if (controlState === STATES.VERIFYING) {
         transitionTo(STATES.IDLE, 'finish_action');
       }
 
@@ -868,12 +1218,18 @@ async function handleMCPMessage(message) {
       }
     } catch (e) {
       activeAction = null;
+      console.error('Error executing MCP action:', e);
+      let finalDecision = 'AUTO';
+      let finalOutcome = 'FAILED';
+      const msg = e.message || String(e);
+
       if (auditRecord) {
-        const msg = e.message || String(e);
         if (msg.includes('HUMAN_TAKEOVER')) {
            auditRecord.decision = 'HUMAN_TAKEOVER';
            auditRecord.execution = 'NOT_EXECUTED';
            auditRecord.outcome = 'UNKNOWN';
+           finalDecision = 'APPROVED';
+           finalOutcome = 'CANCELLED';
         } else {
            auditRecord.execution = 'FAILED';
            auditRecord.outcome = 'FAILED';
@@ -883,8 +1239,16 @@ async function handleMCPMessage(message) {
         console.log(`[Phase6] Execution recorded: ${auditRecord.execution}`);
         console.log('[Phase6] Audit completed (catch)');
       }
-      sendError(id, type, { allowed: false, reason: e.message || String(e), controlState });
-      if (!actionRejected && controlState === STATES.AGENT_RUNNING) {
+
+      updateLedger(ledgerId, {
+        decision: finalDecision,
+        state: STATES.FAILED,
+        outcome: finalOutcome,
+        reason: msg
+      });
+
+      sendError(id, type, { allowed: false, reason: msg, controlState });
+      if (!actionRejected && (controlState === STATES.AGENT_RUNNING || controlState === STATES.VERIFYING)) {
         transitionTo(STATES.IDLE, 'action_failed');
       }
     }
@@ -1500,6 +1864,7 @@ function connect() {
 
     socket.onopen = () => {
       if (connectionGeneration !== myGeneration) return;
+      currentSessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).substring(2, 9);
       console.log('WebSocket connected to MCP server');
       sendPopupStatus('Connected');
       reconnectAttempt = 0;
@@ -1680,6 +2045,130 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     clearAuditLog();
     sendResponse({ success: true });
     return false;
+  }
+
+  if (msg?.cmd === 'getLedger') {
+    getLedger((ledger) => {
+      sendResponse({ ledger });
+    });
+    return true;
+  }
+
+  if (msg?.cmd === 'clearLedger') {
+    chrome.storage.local.set({ [LEDGER_STORAGE_KEY]: [] }, () => {
+      chrome.runtime.sendMessage({ cmd: 'ledgerUpdated' });
+      sendResponse({ success: true });
+    });
+    return true;
+  }
+
+  if (msg?.cmd === 'undoAction') {
+    getLedger(async (ledger) => {
+      const targetEntry = ledger.find(e => e.id === msg.id);
+      if (!targetEntry || !targetEntry.reversible || !targetEntry.snapshotId) {
+        sendResponse({ success: false, reason: "Action is not reversible or snapshot not found" });
+        return;
+      }
+      const snap = actionSnapshots.get(targetEntry.snapshotId);
+      if (!snap) {
+        sendResponse({ success: false, reason: "Snapshot is stale or unavailable" });
+        return;
+      }
+
+      const tabId = await getActiveTabId();
+      if (!tabId || tabId !== snap.tabId) {
+        sendResponse({ success: false, reason: "Active tab does not match the action context" });
+        return;
+      }
+      const tab = await tabsQuery({ active: true, currentWindow: true }).then(t => t[0]);
+      if (!tab || !tab.url) {
+        sendResponse({ success: false, reason: "Unable to query active tab URL" });
+        return;
+      }
+      let currentHostname = '';
+      try { currentHostname = new URL(tab.url).hostname; } catch(_) {}
+      let snapHostname = '';
+      try { snapHostname = new URL(snap.url).hostname; } catch(_) {}
+      if (currentHostname !== snapHostname) {
+        sendResponse({ success: false, reason: "Active tab URL host does not match snap URL host" });
+        return;
+      }
+
+      const evalResult = evaluatePolicy(currentHostname, 'browser_type', { isSensitiveField: false });
+      if (evalResult.decision === 'ALWAYS_DENY') {
+        sendResponse({ success: false, reason: "Policy blocks restoring the value" });
+        return;
+      }
+
+      try {
+        const restored = await exec(tabId, (sel, val) => {
+          const el = document.querySelector(sel);
+          if (el) {
+            el.value = val;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+          }
+          return false;
+        }, [snap.selector, snap.previousValue]);
+
+        if (!restored) {
+          sendResponse({ success: false, reason: "Element not found on the page" });
+          appendLedger({
+            id: 'undo_' + crypto.randomUUID(),
+            sessionId: currentSessionId,
+            timestamp: Date.now(),
+            actor: 'AI',
+            actionType: 'undo_last',
+            target: snap.selector,
+            domain: currentHostname,
+            decision: 'AUTO',
+            state: 'FAILED',
+            outcome: 'FAILED',
+            reversible: false,
+            verification: null,
+            snapshotId: null,
+            reason: "Element not found during undo execution"
+          });
+          return;
+        }
+
+        await new Promise(r => setTimeout(r, 500));
+        const verifyState = await exec(tabId, (sel) => {
+          const el = document.querySelector(sel);
+          return el ? el.value : null;
+        }, [snap.selector]);
+
+        const success = (verifyState === snap.previousValue);
+        const undoOutcome = success ? 'VERIFIED' : 'UNVERIFIED_COMPLETE';
+
+        updateLedger(targetEntry.id, { reversible: false, snapshotId: null });
+        actionSnapshots.delete(targetEntry.snapshotId);
+
+        const undoEntry = {
+          id: 'undo_' + crypto.randomUUID(),
+          sessionId: currentSessionId,
+          timestamp: Date.now(),
+          actor: 'AI',
+          actionType: 'undo_last',
+          target: snap.selector,
+          domain: currentHostname,
+          decision: 'AUTO',
+          state: 'COMPLETED',
+          outcome: undoOutcome,
+          reversible: false,
+          verification: { outcome: undoOutcome, reasons: [success ? "Restored original value successfully." : "Restore finished but verification mismatch."] },
+          snapshotId: null,
+          reason: ''
+        };
+        appendLedger(undoEntry, () => {
+          sendResponse({ success, outcome: undoOutcome });
+        });
+      } catch(e) {
+        sendResponse({ success: false, reason: e.message || String(e) });
+      }
+    });
+    return true;
   }
 });
 

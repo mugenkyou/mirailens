@@ -50,6 +50,8 @@ const snapshotTools: Tool[] = [
   control.stop_agent,
   control.get_policy,
   control.set_policy,
+  control.undo_last,
+  control.get_action_history,
 ];
 
 const resources: Resource[] = [];
