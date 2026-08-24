@@ -62,7 +62,7 @@
 
         <!-- Action Grid -->
         <div class="control-actions">
-          <button id="btn-take-control" class="btn btn-secondary">TAKE CONTROL</button>
+          <button id="btn-take-control" class="btn btn-primary">TAKE CONTROL</button>
           <button id="btn-return-control" class="btn btn-primary hidden">RETURN TO AI</button>
 
           <button id="btn-pause" class="btn btn-secondary">PAUSE AI</button>
@@ -88,36 +88,36 @@
 
       <div class="divider"></div>
       <div class="section-title">POLICY SETTINGS</div>
-      <div class="telemetry-table" style="padding: 8px; display: flex; flex-direction: column; gap: 8px;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-size: 11px; color: #aaa;">DRAFT-ONLY MODE</span>
-          <input type="checkbox" id="policy-draft-only" style="cursor: pointer;" />
+      <div class="policy-settings-box">
+        <div class="policy-setting-row">
+          <span class="policy-label">DRAFT-ONLY MODE</span>
+          <input type="checkbox" id="policy-draft-only" />
         </div>
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-size: 11px; color: #aaa;">SENSITIVE FIELDS</span>
-          <select id="policy-sensitive-fields" style="background: #222; color: #fff; border: 1px solid #555; border-radius: 3px; font-size: 11px; padding: 2px;">
+        <div class="policy-setting-row">
+          <span class="policy-label">SENSITIVE FIELDS</span>
+          <select id="policy-sensitive-fields">
             <option value="ALWAYS_ASK">ALWAYS ASK</option>
             <option value="ALWAYS_DENY">ALWAYS DENY</option>
           </select>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 2px;">
-          <span style="font-size: 11px; color: #aaa;">BLOCKED DOMAINS (comma-separated)</span>
-          <input type="text" id="policy-blocked-domains" placeholder="attacker.com, evil.com" style="background: #222; color: #fff; border: 1px solid #555; border-radius: 3px; font-size: 11px; padding: 4px;" />
+        <div class="policy-setting-col">
+          <span class="policy-label">BLOCKED DOMAINS (comma-separated)</span>
+          <input type="text" id="policy-blocked-domains" placeholder="attacker.com, evil.com" />
         </div>
-        <div style="display: flex; flex-direction: column; gap: 2px;">
-          <span style="font-size: 11px; color: #aaa;">TRUSTED DOMAINS (comma-separated)</span>
-          <input type="text" id="policy-trusted-domains" placeholder="localhost, 127.0.0.1" style="background: #222; color: #fff; border: 1px solid #555; border-radius: 3px; font-size: 11px; padding: 4px;" />
+        <div class="policy-setting-col">
+          <span class="policy-label">TRUSTED DOMAINS (comma-separated)</span>
+          <input type="text" id="policy-trusted-domains" placeholder="localhost, 127.0.0.1" />
         </div>
       </div>
 
       <div class="divider"></div>
 
-      <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
+      <div class="section-title audit-header">
         <span>AUDIT TRAIL</span>
-        <button id="btn-clear-audit" style="background: none; border: 1px solid #555; color: #ccc; cursor: pointer; border-radius: 3px; font-size: 10px; padding: 2px 6px;">CLEAR</button>
+        <button id="btn-clear-audit" class="btn-small">CLEAR</button>
       </div>
-      <div id="audit-log-container" class="telemetry-table" style="max-height: 250px; overflow-y: auto; font-family: monospace; font-size: 11px; display: flex; flex-direction: column; gap: 8px; padding: 8px;">
-        <div style="text-align: center; color: #666; padding: 10px;">No audit records</div>
+      <div id="audit-log-container" class="audit-log-box">
+        <div class="audit-empty">No audit records</div>
       </div>
 
       <div class="footer mono">v1.1.8</div>

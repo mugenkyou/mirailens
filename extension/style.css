@@ -3,25 +3,29 @@
 body {
   font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   margin: 0;
-  padding: 8px;
-  min-width: 300px;
-  background-color: #11110F;
-  color: #E8E7E1;
+  padding: 12px;
+  min-width: 360px;
+  max-width: 400px;
+  background-color: #050505;
+  color: #E5E5E5;
+  box-sizing: border-box;
 }
 
 .console-panel {
-  background-color: #181815;
-  border: 1px solid #30302B;
-  border-radius: 3px;
+  background-color: #0A0A0A;
+  border: 1px solid #1C1C1C;
+  border-radius: 4px;
   padding: 12px;
-  box-shadow: none;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .console-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
 }
 
 .brand {
@@ -40,8 +44,8 @@ body {
 .brand-name {
   font-size: 13px;
   font-weight: 700;
-  letter-spacing: -0.2px;
-  color: #E8E7E1;
+  letter-spacing: 0.5px;
+  color: #E5E5E5;
   text-transform: uppercase;
 }
 
@@ -49,42 +53,46 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 10px;
-  color: #A7A69F;
+  font-size: 11px;
+  font-weight: 500;
+  color: #888888;
 }
 
 .status-dot {
   width: 6px;
   height: 6px;
-  background-color: #6F6E68;
-  border-radius: 0; /* Square indicator */
+  background-color: #444444;
+  border-radius: 50%;
+  transition: background-color 200ms ease;
 }
 
 /* Connection States */
 .badge-connected .status-dot,
 .status-connected .status-dot {
-  background-color: #C6A15B; /* RESTING OCHRE INDICATOR */
+  background-color: #B6FF00;
+  box-shadow: 0 0 4px rgba(182, 255, 0, 0.4);
 }
 
 .badge-disconnected .status-dot,
 .status-disconnected .status-dot {
-  background-color: #6F6E68;
+  background-color: #555555;
+  box-shadow: none;
 }
 
 .divider {
   height: 1px;
-  background-color: #30302B;
-  margin: 10px 0;
+  background-color: #1C1C1C;
+  margin: 4px 0;
 }
 
 .section-title {
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.8px;
-  color: #6F6E68;
+  letter-spacing: 1px;
+  color: #666666;
   text-transform: uppercase;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .mono {
@@ -97,116 +105,108 @@ body {
   text-overflow: ellipsis;
 }
 
-/* Control state layout */
+/* Control state layout - Flat neutral */
 .control-state-box {
-  background-color: #1D1D19;
-  border: 1px solid #30302B;
-  border-radius: 2px;
-  padding: 10px;
-  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
 }
 
 .status-indicator {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #E8E7E1;
+  font-size: 11px;
+  font-weight: 600;
+  color: #E5E5E5;
   text-transform: uppercase;
-  margin-bottom: 4px;
 }
 
 .status-indicator-dot {
-  width: 5px;
-  height: 5px;
-  background-color: #6F6E68;
-  border-radius: 0;
+  width: 6px;
+  height: 6px;
+  background-color: #444444;
+  border-radius: 50%;
 }
 
 /* State changes mapping indicator */
 .badge-connected .status-indicator-dot,
 .badge-idle .status-indicator-dot {
-  background-color: #A7A69F;
+  background-color: #B6FF00;
+  box-shadow: 0 0 4px rgba(182, 255, 0, 0.4);
 }
 .badge-working .status-indicator-dot {
-  background-color: #C6A15B; /* Ochre indicator for AI working */
+  background-color: #B6FF00;
+  box-shadow: 0 0 4px rgba(182, 255, 0, 0.4);
 }
 .badge-waiting .status-indicator-dot {
-  background-color: #C6A15B;
+  background-color: #FFA500;
 }
 .badge-controlling .status-indicator-dot {
-  background-color: #E8E7E1; /* White indicator for human */
+  background-color: #00BFFF;
 }
 .badge-blocked .status-indicator-dot {
-  background-color: #B45A52; /* Muted red indicator for blocked */
+  background-color: #FF4500;
 }
 .badge-completed .status-indicator-dot {
-  background-color: #A7A69F;
+  background-color: #B6FF00;
 }
 .badge-failed .status-indicator-dot {
-  background-color: #B45A52;
+  background-color: #FF4500;
 }
 
 .desc-text {
   font-size: 11px;
-  color: #A7A69F;
+  color: #888888;
   line-height: 1.4;
 }
 
 .tab-box {
-  background-color: #1D1D19;
-  border: 1px solid #30302B;
-  border-radius: 2px;
-  padding: 8px;
+  padding: 4px 0;
   font-size: 11px;
-  color: #E8E7E1;
+  color: #E5E5E5;
 }
 
 /* Telemetry Table */
 .telemetry-table {
-  background-color: #1D1D19;
-  border: 1px solid #30302B;
-  border-radius: 2px;
-  padding: 4px 8px;
   display: flex;
   flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
 }
 
 .telemetry-row {
   display: flex;
   justify-content: space-between;
-  padding: 6px 0;
-  border-bottom: 1px solid #30302B;
-}
-
-.telemetry-row:last-child {
-  border-bottom: none;
+  align-items: center;
+  padding: 4px 0;
 }
 
 .telemetry-label {
   font-size: 10px;
-  color: #6F6E68;
+  color: #666666;
 }
 
 .telemetry-value {
   font-size: 10px;
-  color: #A7A69F;
+  color: #E5E5E5;
 }
 
 /* Actions Grid and Buttons */
 .control-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin-bottom: 6px;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 .btn {
   display: block;
   width: 100%;
-  padding: 8px 12px;
-  border-radius: 2px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 3px;
   font-family: 'IBM Plex Sans', sans-serif;
   font-size: 11px;
   font-weight: 600;
@@ -214,47 +214,48 @@ body {
   cursor: pointer;
   box-sizing: border-box;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
-  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+  line-height: 36px;
+  transition: all 120ms ease;
+  background-color: #101010;
+  border: 1px solid #1C1C1C;
+  color: #E5E5E5;
+  outline: none;
+}
+
+.btn:hover {
+  background-color: #151815;
+  border-color: #2A2A2A;
 }
 
 .btn-primary {
-  background-color: #E8E7E1;
-  color: #11110F;
-  border: 1px solid #41413A;
+  border-color: #B6FF00;
+  color: #E5E5E5;
 }
 
 .btn-primary:hover {
-  background-color: #ffffff;
-  border-color: #E8E7E1;
-}
-
-.btn-secondary {
-  background-color: #1D1D19;
-  color: #E8E7E1;
-  border: 1px solid #30302B;
-}
-
-.btn-secondary:hover {
-  background-color: #262621;
-  border-color: #41413A;
+  background-color: #B6FF00;
+  color: #050505;
+  border-color: #B6FF00;
 }
 
 .btn-danger {
-  background-color: #1D1D19;
-  color: #B45A52;
-  border: 1px solid #B45A52;
+  background-color: #101010;
+  border-color: #522B2B;
+  color: #FF5555;
   font-weight: 700;
 }
 
 .btn-danger:hover {
-  background-color: #B45A52;
-  color: #11110F;
+  background-color: #522B2B;
+  color: #FFFFFF;
+  border-color: #FF5555;
 }
 
 .connection-actions {
-  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .hidden {
@@ -263,20 +264,127 @@ body {
 
 /* Error Box */
 .error-box {
-  margin-top: 10px;
   padding: 8px 10px;
-  background-color: #1D1D19;
-  border: 1px solid #B45A52;
-  border-radius: 2px;
-  color: #B45A52;
+  background-color: #101010;
+  border: 1px solid #522B2B;
+  border-radius: 3px;
+  color: #FF5555;
   font-family: 'IBM Plex Mono', monospace;
-  font-size: 10px;
+  font-size: 11px;
   word-break: break-all;
 }
 
 .footer {
-  font-size: 9px;
-  color: #6F6E68;
+  font-size: 10px;
+  color: #444444;
   text-align: center;
-  margin-top: 12px;
+  margin-top: 16px;
+}
+
+/* Policy Settings */
+.policy-settings-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.policy-setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.policy-setting-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.policy-label {
+  font-size: 10px;
+  color: #666666;
+  font-weight: 500;
+}
+
+#policy-draft-only {
+  cursor: pointer;
+  accent-color: #B6FF00;
+}
+
+#policy-sensitive-fields {
+  background-color: #0A0A0A;
+  border: 1px solid #1C1C1C;
+  color: #E5E5E5;
+  border-radius: 3px;
+  font-size: 10px;
+  padding: 4px 8px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 150ms ease;
+}
+
+#policy-sensitive-fields:focus {
+  border-color: #B6FF00;
+}
+
+#policy-blocked-domains,
+#policy-trusted-domains {
+  background-color: #0A0A0A;
+  border: 1px solid #1C1C1C;
+  color: #E5E5E5;
+  border-radius: 3px;
+  font-size: 11px;
+  padding: 6px 8px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color 150ms ease;
+}
+
+#policy-blocked-domains:focus,
+#policy-trusted-domains:focus {
+  border-color: #B6FF00;
+}
+
+/* Audit log section */
+.audit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.btn-small {
+  background: none;
+  border: 1px solid #1C1C1C;
+  color: #888888;
+  cursor: pointer;
+  border-radius: 3px;
+  font-size: 9px;
+  padding: 2px 8px;
+  font-family: 'IBM Plex Mono', monospace;
+  transition: all 120ms ease;
+}
+
+.btn-small:hover {
+  border-color: #2A2A2A;
+  color: #E5E5E5;
+  background-color: #101010;
+}
+
+.audit-log-box {
+  max-height: 250px;
+  overflow-y: auto;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.audit-empty {
+  text-align: center;
+  color: #444444;
+  padding: 12px;
 }
