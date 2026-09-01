@@ -18,40 +18,89 @@ export function createSocketMessageSender<T>(
       options: { timeoutMs?: number } = { timeoutMs: 30000 }
     ): Promise<any> {
       return new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error("Request timeout"));
-        }, options.timeoutMs);
+        if (!ws || ws.readyState !== WebSocket.OPEN) {
+          return reject(
+            new Error(
+              "No connection to browser extension. WebSocket is not open."
+            )
+          );
+        }
 
-        const messageId = Math.random().toString(36).substr(2, 9);
-        
+        const messageId = Math.random().toString(36).substring(2, 11);
+        let cleanupDone = false;
+
         const message = {
           id: messageId,
           type,
           payload,
         };
 
+        const cleanup = () => {
+          if (cleanupDone) return;
+          cleanupDone = true;
+          clearTimeout(timeout);
+          ws.off("message", handleMessage);
+          ws.off("close", handleClose);
+          ws.off("error", handleError);
+        };
+
+        const timeout = setTimeout(() => {
+          cleanup();
+          reject(new Error("Request timeout"));
+        }, options.timeoutMs);
+
         const handleMessage = (data: any) => {
           try {
             const response = JSON.parse(data.toString());
             if (response.id === messageId) {
-              clearTimeout(timeout);
-              ws.off('message', handleMessage);
+              cleanup();
               if (response.error) {
                 reject(new Error(response.error));
               } else {
                 resolve(response.result);
               }
             }
-          } catch (e) {
+          } catch (_) {
             // Ignore malformed messages
           }
         };
 
-        ws.on('message', handleMessage);
-        ws.send(JSON.stringify(message));
+        const handleClose = (event?: any) => {
+          cleanup();
+          reject(
+            new Error(
+              `WebSocket closed during request${
+                event ? ` (Code: ${event})` : ""
+              }`
+            )
+          );
+        };
+
+        const handleError = (err?: any) => {
+          cleanup();
+          reject(
+            new Error(
+              `WebSocket error during request: ${
+                err?.message || String(err)
+              }`
+            )
+          );
+        };
+
+        ws.on("message", handleMessage);
+        ws.once("close", handleClose);
+        ws.once("error", handleError);
+
+        try {
+          ws.send(JSON.stringify(message));
+        } catch (sendErr) {
+          cleanup();
+          reject(sendErr);
+        }
       });
     },
   };
 }
+
 
 

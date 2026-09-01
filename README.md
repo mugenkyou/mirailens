@@ -4,7 +4,7 @@
 
 [![npm version](https://img.shields.io/npm/v/mirailens.svg)](https://www.npmjs.com/package/mirailens)
 [![License: Custom](https://img.shields.io/badge/License-Community%20Non--Commercial-blue.svg)](LICENSE)
-[![CI Status](https://github.com/mugenkyou/mcp-server-mirailens/actions/workflows/ci.yml/badge.svg)](https://github.com/mugenkyou/mcp-server-mirailens/actions/workflows/ci.yml)
+[![CI Status](https://github.com/mugenkyou/mirailens/actions/workflows/ci.yml/badge.svg)](https://github.com/mugenkyou/mirailens/actions/workflows/ci.yml)
 [![Protocol Version](https://img.shields.io/badge/Protocol-1.0-orange.svg)](#protocol-compatibility)
 
 ---
@@ -14,11 +14,11 @@
 - **Website**: [mirailens.vercel.app](https://mirailens.vercel.app)
 - **Chrome Extension**: [MiraiLens Connector on Chrome Web Store](https://chromewebstore.google.com/detail/cjkgpjbjjefoecfbiehiognojjdhofmg)
 - **npm Package**: [npm/mirailens](https://www.npmjs.com/package/mirailens)
-- **GitHub Repository**: [mugenkyou/mcp-server-mirailens](https://github.com/mugenkyou/mcp-server-mirailens)
-- **Security Policy**: [SECURITY.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/SECURITY.md)
-- **Threat Model**: [threat_model.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/threat_model.md)
-- **Architecture Details**: [docs/architecture.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/docs/architecture.md)
-- **Contributing Guide**: [CONTRIBUTING.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/CONTRIBUTING.md)
+- **GitHub Repository**: [mugenkyou/mirailens](https://github.com/mugenkyou/mirailens)
+- **Security Policy**: [SECURITY.md](https://github.com/mugenkyou/mirailens/blob/main/SECURITY.md)
+- **Threat Model**: [threat_model.md](https://github.com/mugenkyou/mirailens/blob/main/threat_model.md)
+- **Architecture Details**: [docs/architecture.md](https://github.com/mugenkyou/mirailens/blob/main/docs/architecture.md)
+- **Contributing Guide**: [CONTRIBUTING.md](https://github.com/mugenkyou/mirailens/blob/main/CONTRIBUTING.md)
 
 ---
 
@@ -122,7 +122,7 @@ MiraiLens does **NOT** claim to solve prompt injection. A malicious webpage or i
               RECORD RESULT (Write to sandboxed local ledger)
 ```
 
-For more information, please read the [threat_model.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/threat_model.md) and [SECURITY.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/SECURITY.md) guidelines.
+For more information, please read the [threat_model.md](https://github.com/mugenkyou/mirailens/blob/main/threat_model.md) and [SECURITY.md](https://github.com/mugenkyou/mirailens/blob/main/SECURITY.md) guidelines.
 
 ---
 
@@ -155,10 +155,26 @@ The **MiraiLens Connector** bridges the MCP server to your active browser enviro
 
 ---
 
-## MCP Client Configuration
+## Universal MCP Client Configuration
+
+MiraiLens is client-agnostic and fully standards-compliant with the Model Context Protocol (MCP) JSON-RPC specification over `stdio`. The same MiraiLens installation connects with any compliant MCP client without client-specific hacks.
+
+### Google Antigravity
+Add MiraiLens in your Antigravity MCP settings or configuration file (`~/.gemini/antigravity-ide/mcp_config.json` or workspace settings):
+
+```json
+{
+  "mcpServers": {
+    "mirailens": {
+      "command": "npx",
+      "args": ["-y", "mirailens@latest"]
+    }
+  }
+}
+```
 
 ### Cursor
-Add the following config to your Cursor `mcp.json` parameters:
+Add to your Cursor settings under `Features > MCP Servers` or directly in `mcp.json`:
 
 ```json
 {
@@ -172,7 +188,7 @@ Add the following config to your Cursor `mcp.json` parameters:
 ```
 
 ### Claude Desktop
-Add the following to your `claude_desktop_config.json`:
+Add to your `claude_desktop_config.json` (`%APPDATA%\Claude\claude_desktop_config.json` on Windows or `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
 
 ```json
 {
@@ -185,52 +201,131 @@ Add the following to your `claude_desktop_config.json`:
 }
 ```
 
+### Claude Code (CLI)
+Add using the Claude Code CLI tool:
+
+```bash
+claude mcp add mirailens npx -y mirailens@latest
+```
+
+### VS Code (Cline / Roo Code / Continue)
+Add to your MCP server configuration:
+
+```json
+{
+  "mcpServers": {
+    "mirailens": {
+      "command": "npx",
+      "args": ["-y", "mirailens@latest"]
+    }
+  }
+}
+```
+
+### Windsurf
+Add to `~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "mirailens": {
+      "command": "npx",
+      "args": ["-y", "mirailens@latest"]
+    }
+  }
+}
+```
+
+### Gemini CLI
+Add to your Gemini CLI configuration:
+
+```json
+{
+  "mcpServers": {
+    "mirailens": {
+      "command": "npx",
+      "args": ["-y", "mirailens@latest"]
+    }
+  }
+}
+```
+
+### MCP Inspector
+Test and inspect MiraiLens interactively via the official MCP Inspector:
+
+```bash
+npx @modelcontextprotocol/inspector npx -y mirailens@latest
+```
+
 ---
 
 ## Technical Architecture
 
 ```text
-    +--------------+       Model Context Protocol (JSON-RPC)       +---------------+
-    |  MCP Client  | <-------------------------------------------> |  MCP Server   |
-    | (Proposer)   |                                               | (Translator)  |
-    +--------------+                                               +---------------+
-                                                                           |
-                                                                 WebSocket | (JSON-RPC)
-                                                                           v
-    +--------------+            Chrome Message Passing             +---------------+
-    |  Browser     | <-------------------------------------------- |  Extension    |
-    |  Tab DOM     |                                               |  Service      |
-    +--------------+                                               |  Worker       |
-                                                                   |  (Enforcer)   |
-                                                                   +---------------+
+┌─────────────────────────────────────────────────────────────┐
+│                       MCP CLIENTS                           │
+│  [Google Antigravity]  [Cursor]  [Claude]  [VS Code]  [...] │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ MCP stdio (Strict JSON-RPC)
+                               │ (All diagnostic logs -> stderr)
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    MIRAILENS MCP SERVER                     │
+│  • Stdio JSON-RPC Transport & Message Framing               │
+│  • Authoritative State Tracking (MCP / Extension / Tab)     │
+│  • Safe Non-Blocking Port Management (Port 29100)           │
+│  • Bounded WebSocket Communication & Error Handling         │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ WebSocket (JSON-RPC)
+                               │ (Connect / Reconnect / Heartbeat)
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  MIRAILENS CONNECTOR EXTENSION              │
+│  • State Machine: IDLE, RUNNING, HUMAN_CONTROLLED, BLOCKED  │
+│  • Security Policy Gate (Blocked Domains, Sensitive Fields) │
+│  • Human Intervention (Approve / Deny, Pause, Stop)         │
+│  • Post-Action DOM & Navigation Verification                │
+│  • Tamper-Evident Sandboxed Action Ledger                   │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ Chromium MV3 APIs
+                               ▼
+                        [Browser Tabs / Web]
 ```
 
-- **MCP Client**: Evaluates goals and proposes browser actions.
-- **MCP Server**: Coordinates stdio streams and translates requests into local WebSocket messages.
-- **Browser Extension**:authoritative client-side security authority; evaluates policies, prompts for confirmation, verifies states, and records audits.
+- **MCP Client**: Formulates intents and proposes browser actions over stdio.
+- **MCP Server**: Coordinates stdio streams, ensures stdout remains 100% clean protocol traffic, and communicates with the Chrome extension over WebSocket.
+- **Browser Extension**: Authoritative client-side security authority; evaluates policies, prompts for confirmation, verifies states, and records audits.
 - **Browser Tab DOM**: Executes supported automation scripts and renders confirmation overlays.
 
-For structural details, see [docs/architecture.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/docs/architecture.md).
+For structural details, see [docs/architecture.md](https://github.com/mugenkyou/mirailens/blob/main/docs/architecture.md).
 
 ---
 
-## Supported Clients & Browsers
+## Client Compatibility Matrix
 
-### Known Integrations
-- **Cursor** (v0.40.4+)
-- **Claude Desktop** (v0.7.0+)
-- **MCP Inspector** (v0.1.0+)
+| MCP Client | Transport | Tested Status | Extension Compatibility |
+| :--- | :--- | :--- | :--- |
+| **Google Antigravity** | stdio | **Tested & Verified** | Seamless |
+| **Cursor** | stdio | **Tested & Verified** | Seamless |
+| **MCP Inspector** | stdio | **Tested & Verified** | Seamless |
+| **Claude Desktop** | stdio | **Tested & Verified** | Seamless |
+| **Claude Code** | stdio | **Compatible** | Seamless |
+| **VS Code (MCP / Cline / Roo)** | stdio | **Compatible** | Seamless |
+| **Windsurf** | stdio | **Compatible** | Seamless |
+| **Gemini CLI** | stdio | **Compatible** | Seamless |
 
 ### Web Browsers
 - **Google Chrome / Chromium**: Fully Supported (Recommended).
 - **Microsoft Edge**: Fully Supported.
+- **Brave / Arc / Vivaldi**: Fully Supported.
 - **Mozilla Firefox**: Not currently supported (extension relies on Chromium-specific MV3 scripting namespace APIs).
 
 ---
 
 ## Protocol Compatibility
 
-The server communication protocol is frozen at version **v1.0**. All future patch releases in the v1.2.x series will maintain backward compatibility with v1.0 clients.
+The server communication protocol is frozen at version **v1.0**. All future patch releases in the v1.2.x series maintain backward compatibility with v1.0 clients.
+
 
 ---
 
@@ -238,8 +333,8 @@ The server communication protocol is frozen at version **v1.0**. All future patc
 
 ```bash
 # Clone the repository
-git clone https://github.com/mugenkyou/mcp-server-mirailens.git
-cd mcp-server-mirailens
+git clone https://github.com/mugenkyou/mirailens.git
+cd mirailens
 
 # Clean dependency installation
 npm ci
@@ -261,7 +356,7 @@ npm pack --dry-run
 
 ## Contributing
 
-For coding conventions and pull request rules, see [CONTRIBUTING.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/CONTRIBUTING.md). Security issues must be reported privately following [SECURITY.md](https://github.com/mugenkyou/mcp-server-mirailens/blob/main/SECURITY.md).
+For coding conventions and pull request rules, see [CONTRIBUTING.md](https://github.com/mugenkyou/mirailens/blob/main/CONTRIBUTING.md). Security issues must be reported privately following [SECURITY.md](https://github.com/mugenkyou/mirailens/blob/main/SECURITY.md).
 
 ---
 
@@ -280,5 +375,5 @@ Distributed under the **MiraiLens Community Non-Commercial License, Version 1.0*
   <a href="https://mirailens.vercel.app">Website</a> |
   <a href="https://chromewebstore.google.com/detail/cjkgpjbjjefoecfbiehiognojjdhofmg">Chrome Extension</a> |
   <a href="https://www.npmjs.com/package/mirailens">npm</a> |
-  <a href="https://github.com/mugenkyou/mcp-server-mirailens">GitHub</a>
+  <a href="https://github.com/mugenkyou/mirailens">GitHub</a>
 </p>

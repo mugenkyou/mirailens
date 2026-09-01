@@ -13,8 +13,8 @@ Thank you for your interest in contributing to MiraiLens! Please follow these de
 
 ### Clone and Install Dependencies
 ```bash
-git clone https://github.com/mugenkyou/mcp-server-mirailens.git
-cd mcp-server-mirailens
+git clone https://github.com/mugenkyou/mirailens.git
+cd mirailens
 npm ci
 ```
 

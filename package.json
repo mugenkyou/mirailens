@@ -1,6 +1,6 @@
 {
   "name": "mirailens",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "MCP server for browser automation using MiraiLens",
   "author": {
     "name": "Mugenkyou",
@@ -12,11 +12,11 @@
       "url": "https://github.com/imrohit44"
     }
   ],
-  "homepage": "https://mirailens.io",
+  "homepage": "https://mirailens.vercel.app",
   "bugs": "https://github.com/mirailens/mcp/issues",
   "repository": {
     "type": "git",
-    "url": "https://github.com/mugenkyou/mcp-server-mirailens.git"
+    "url": "git+https://github.com/mugenkyou/mirailens.git"
   },
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
@@ -34,7 +34,7 @@
     "prepare": "npm run build",
     "watch": "tsup src/index.ts --format esm --watch",
     "inspector": "CLIENT_PORT=9001 SERVER_PORT=9002 pnpx @modelcontextprotocol/inspector node dist/index.js",
-    "test": "node --test tests/state-machine.test.js && node --test tests/security.test.js && node --test tests/accountability.test.js && node --test tests/release.test.js"
+    "test": "node --test tests/stdio-safety.test.js && node --test tests/port-management.test.js && node --test tests/websocket-lifecycle.test.js && node --test tests/state-machine.test.js && node --test tests/security.test.js && node --test tests/accountability.test.js && node --test tests/release.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.8.0",

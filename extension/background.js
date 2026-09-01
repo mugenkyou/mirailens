@@ -1877,7 +1877,7 @@ function connect() {
       startHeartbeat();
       socket.send(JSON.stringify({
         type: 'extension_connected',
-        data: { version: '1.2.0', capabilities: ['navigate', 'click', 'type', 'hover', 'snapshot'] }
+        data: { version: '1.2.2', capabilities: ['navigate', 'click', 'type', 'hover', 'snapshot'] }
       }));
       notifyServerStateChange(controlState);
     };

@@ -20,7 +20,7 @@ Security updates and patches are actively provided for the following versions:
 If you discover a security vulnerability in MiraiLens, please report it responsibly using our GitHub repository's built-in **Private Vulnerability Reporting** mechanism.
 
 ### How to Submit a Report
-1. Go to the repository on GitHub: `https://github.com/mugenkyou/mcp-server-mirailens`
+1. Go to the repository on GitHub: `https://github.com/mugenkyou/mirailens`
 2. Navigate to the **Security** tab.
 3. Click **Report a vulnerability** to open the draft advisory page.
 

@@ -22,11 +22,7 @@ export const get_agent_status: Tool = {
       return {
         content: [{
           type: "text",
-          text: JSON.stringify({
-            state: "BLOCKED",
-            connectionStatus: "disconnected",
-            allowedToExecute: false
-          }, null, 2)
+          text: JSON.stringify(context.getStatusReport(), null, 2)
         }]
       };
     }
@@ -37,21 +33,21 @@ export const get_agent_status: Tool = {
         content: [{
           type: "text",
           text: JSON.stringify({
+            mcpServer: context.mcpServerState,
             state: response.state,
             connectionStatus: response.connectionStatus,
-            allowedToExecute: response.allowedToExecute
+            allowedToExecute: response.allowedToExecute,
+            extensionState: "CONNECTED",
+            extensionInfo: context.extensionInfo
           }, null, 2)
         }]
       };
     } catch (e) {
-      const allowed = context.controlState === "IDLE" || context.controlState === "AGENT_RUNNING" || context.controlState === "AGENT_RESUMING";
       return {
         content: [{
           type: "text",
           text: JSON.stringify({
-            state: context.controlState,
-            connectionStatus: "connected",
-            allowedToExecute: allowed,
+            ...context.getStatusReport(),
             warning: "Fallback to mirrored state: " + String((e as any).message || e)
           }, null, 2)
         }]

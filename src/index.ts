@@ -13,13 +13,33 @@ import * as snapshot from "@/tools/snapshot";
 import * as control from "@/tools/control";
 import type { Tool } from "@/tools/tool";
 
+import { protectStdioTransport } from "@/utils/log";
+
 import packageJSON from "../package.json";
 
 function setupExitWatchdog(server: Server) {
-  process.stdin.on("close", async () => {
-    setTimeout(() => process.exit(0), 15000);
-    await server.close();
-    process.exit(0);
+  let isClosing = false;
+  const cleanupAndExit = async (code: number = 0) => {
+    if (isClosing) return;
+    isClosing = true;
+    const forceExitTimeout = setTimeout(() => process.exit(code), 3000);
+    try {
+      await server.close();
+    } catch (_) {}
+    clearTimeout(forceExitTimeout);
+    process.exit(code);
+  };
+
+  process.stdin.on("close", () => {
+    cleanupAndExit(0);
+  });
+
+  process.on("SIGINT", () => {
+    cleanupAndExit(0);
+  });
+
+  process.on("SIGTERM", () => {
+    cleanupAndExit(0);
   });
 }
 
@@ -72,6 +92,7 @@ program
   .version("Version " + packageJSON.version)
   .name(packageJSON.name)
   .action(async () => {
+    protectStdioTransport();
     const server = await createServer();
     setupExitWatchdog(server);
 

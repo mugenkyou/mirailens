@@ -1,17 +1,26 @@
 import { WebSocketServer } from "ws";
 
 import { mcpConfig } from "@/config/mcp.config";
-import { wait } from "@/utils/wait";
-
-import { isPortInUse, killProcessOnPort } from "@/utils/port";
+import { ensurePortAvailable } from "@/utils/port";
+import { debugLog } from "@/utils/log";
 
 export async function createWebSocketServer(
   port: number = mcpConfig.defaultWsPort,
 ): Promise<WebSocketServer> {
-  killProcessOnPort(port);
-  // Wait until the port is free
-  while (await isPortInUse(port)) {
-    await wait(100);
+  const isAvailable = await ensurePortAvailable(port, 2500);
+  if (!isAvailable) {
+    debugLog(
+      `[MiraiLens] Warning: Port ${port} is occupied. Attempting to bind WebSocket server...`,
+    );
   }
-  return new WebSocketServer({ port });
+
+  try {
+    const wss = new WebSocketServer({ port });
+    debugLog(`[MiraiLens] WebSocket server listening on port ${port}`);
+    return wss;
+  } catch (error) {
+    debugLog(`[MiraiLens] Failed to bind WebSocket server on port ${port}:`, error);
+    throw error;
+  }
 }
+

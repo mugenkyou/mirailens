@@ -10,6 +10,7 @@ import { Context } from "@/context";
 import type { Resource } from "@/resources/resource";
 import type { Tool } from "@/tools/tool";
 import { createWebSocketServer } from "@/ws";
+import { debugLog } from "@/utils/log";
 
 type Options = {
   name: string;
@@ -33,7 +34,9 @@ export async function createServerWithTools(options: Options): Promise<Server> {
 
   const wss = await createWebSocketServer();
   wss.on("connection", (websocket) => {
-    // Close any existing connections
+    debugLog("[MiraiLens] Extension WebSocket connection established");
+
+    // Close any existing active connection
     if (context.hasWs()) {
       try {
         context.ws.close();
@@ -45,13 +48,49 @@ export async function createServerWithTools(options: Options): Promise<Server> {
       try {
         const message = JSON.parse(data.toString());
         if (message.type === "heartbeat_ping") {
-          websocket.send(JSON.stringify({ id: message.id, type: "heartbeat_pong", result: "pong" }));
+          websocket.send(
+            JSON.stringify({
+              id: message.id,
+              type: "heartbeat_pong",
+              result: "pong",
+            }),
+          );
+        } else if (message.type === "extension_connected") {
+          context.extensionInfo = message.data || {};
+          context.extensionState = "CONNECTED";
+          debugLog(
+            `[MiraiLens] Extension identified: v${message.data?.version || "unknown"}`,
+          );
         } else if (message.type === "control_state_changed") {
-          context.controlState = message.payload.state;
-          console.log(`[MCP Server] Mirrored control state updated to: ${context.controlState}`);
+          context.controlState = message.payload?.state || "IDLE";
+          debugLog(
+            `[MiraiLens] Extension control state updated to: ${context.controlState}`,
+          );
+        } else if (message.type === "tab_state_changed") {
+          if (message.payload?.connected) {
+            context.browserState = "CONNECTED";
+          } else {
+            context.browserState = "UNAVAILABLE";
+          }
         }
       } catch (err) {
         // Ignore malformed messages
+      }
+    });
+
+    websocket.on("close", (code, reason) => {
+      debugLog(
+        `[MiraiLens] Extension WebSocket closed (Code: ${code}, Reason: ${reason || "none"})`,
+      );
+      if (context.hasWs() && context.ws === websocket) {
+        context.onExtensionDisconnect();
+      }
+    });
+
+    websocket.on("error", (err) => {
+      debugLog("[MiraiLens] Extension WebSocket error:", err);
+      if (context.hasWs() && context.ws === websocket) {
+        context.onExtensionDisconnect();
       }
     });
   });
@@ -79,8 +118,10 @@ export async function createServerWithTools(options: Options): Promise<Server> {
       const result = await tool.handle(context, request.params.arguments);
       return result;
     } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       return {
-        content: [{ type: "text", text: String(error) }],
+        content: [{ type: "text", text: errorMessage }],
         isError: true,
       };
     }
@@ -98,11 +139,21 @@ export async function createServerWithTools(options: Options): Promise<Server> {
     return { contents };
   });
 
+  const originalClose = server.close.bind(server);
   server.close = async () => {
-    await server.close();
-    await wss.close();
-    await context.close();
+    try {
+      await originalClose();
+    } catch (_) {}
+    try {
+      await new Promise<void>((resolve) => {
+        wss.close(() => resolve());
+      });
+    } catch (_) {}
+    try {
+      await context.close();
+    } catch (_) {}
   };
 
   return server;
 }
+

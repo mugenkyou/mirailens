@@ -9,7 +9,7 @@ body:
         If you believe you have found a security vulnerability in MiraiLens, please **do not** report it publicly using the GitHub issue tracker.
         
         Please disclose security vulnerabilities privately by:
-        1. Navigating to the [Security tab](https://github.com/mugenkyou/mcp-server-mirailens/security) on GitHub.
+        1. Navigating to the [Security tab](https://github.com/mugenkyou/mirailens/security) on GitHub.
         2. Clicking on **Advisories** and then **Report a vulnerability**.
         3. Alternatively, you can email the maintainers privately at `sachinskyte@gmail.com`.
         
