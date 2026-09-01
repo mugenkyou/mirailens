@@ -4,8 +4,15 @@
 
 [![npm version](https://img.shields.io/npm/v/mirailens.svg)](https://www.npmjs.com/package/mirailens)
 [![License: Custom](https://img.shields.io/badge/License-Community%20Non--Commercial-blue.svg)](LICENSE)
+<<<<<<< HEAD
 [![CI Status](https://github.com/mugenkyou/mirailens/actions/workflows/ci.yml/badge.svg)](https://github.com/mugenkyou/mirailens/actions/workflows/ci.yml)
 [![Protocol Version](https://img.shields.io/badge/Protocol-1.0-orange.svg)](#protocol-compatibility)
+=======
+[![CI Status](https://github.com/mugenkyou/mcp-server-mirailens/actions/workflows/ci.yml/badge.svg)](https://github.com/mugenkyou/mcp-server-mirailens/actions/workflows/ci.yml)
+[![Protocol Version](https://img.shields.io/badge/Protocol-1.0-orange.svg)](#protocol-compatibility-policy)
+
+[Website](https://mirailens.vercel.app) | [Documentation](https://github.com/mugenkyou/mcp-server-mirailens#readme) | [Security](SECURITY.md) | [Architecture](docs/architecture.md) | [GitHub](https://github.com/mugenkyou/mcp-server-mirailens) | [npm](https://www.npmjs.com/package/mirailens)
+>>>>>>> c9acad742a982aec6e1a25697daf21910029ae14
 
 ---
 
