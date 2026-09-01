@@ -17,7 +17,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@v4
         with:
           node-version: 22
 
@@ -64,7 +64,7 @@ jobs:
           zip -r ../mirailens-extension.zip . -x "*.git*"
 
       - name: Upload Extension Artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: mirailens-extension
           path: mirailens-extension.zip

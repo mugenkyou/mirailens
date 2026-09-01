@@ -1,386 +1,390 @@
-# <img src="https://mirailens.vercel.app/logo/favicon-32x32.png" width="28" height="28" align="center" alt="MiraiLens Logo"> MiraiLens
+# MiraiLens
 
-### The browser control layer for AI agents.
+### Browser control infrastructure for MCP agents. Connect MCP-compatible AI clients to a real browser through a controlled Chrome extension.
 
+[![CI](https://github.com/mugenkyou/mirailens/actions/workflows/ci.yml/badge.svg)](https://github.com/mugenkyou/mirailens/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/mirailens.svg)](https://www.npmjs.com/package/mirailens)
-[![License: Custom](https://img.shields.io/badge/License-Community%20Non--Commercial-blue.svg)](LICENSE)
-<<<<<<< HEAD
-[![CI Status](https://github.com/mugenkyou/mirailens/actions/workflows/ci.yml/badge.svg)](https://github.com/mugenkyou/mirailens/actions/workflows/ci.yml)
-[![Protocol Version](https://img.shields.io/badge/Protocol-1.0-orange.svg)](#protocol-compatibility)
-=======
-[![CI Status](https://github.com/mugenkyou/mcp-server-mirailens/actions/workflows/ci.yml/badge.svg)](https://github.com/mugenkyou/mcp-server-mirailens/actions/workflows/ci.yml)
-[![Protocol Version](https://img.shields.io/badge/Protocol-1.0-orange.svg)](#protocol-compatibility-policy)
+[![License](https://img.shields.io/badge/license-Community%20Non--Commercial-blue.svg)](LICENSE)
+[![GitHub](https://img.shields.io/badge/github-mugenkyou%2Fmirailens-blue)](https://github.com/mugenkyou/mirailens)
 
-[Website](https://mirailens.vercel.app) | [Documentation](https://github.com/mugenkyou/mcp-server-mirailens#readme) | [Security](SECURITY.md) | [Architecture](docs/architecture.md) | [GitHub](https://github.com/mugenkyou/mcp-server-mirailens) | [npm](https://www.npmjs.com/package/mirailens)
->>>>>>> c9acad742a982aec6e1a25697daf21910029ae14
+[Website](https://mirailens.vercel.app) • [Documentation](https://mirailens.vercel.app) • [NPM](https://www.npmjs.com/package/mirailens) • [GitHub](https://github.com/mugenkyou/mirailens)
 
 ---
 
-## Resources
+> **An MCP-based browser control layer for AI agents — with human control, policy enforcement, verification, and browser-side safeguards.**
 
-- **Website**: [mirailens.vercel.app](https://mirailens.vercel.app)
-- **Chrome Extension**: [MiraiLens Connector on Chrome Web Store](https://chromewebstore.google.com/detail/cjkgpjbjjefoecfbiehiognojjdhofmg)
-- **npm Package**: [npm/mirailens](https://www.npmjs.com/package/mirailens)
-- **GitHub Repository**: [mugenkyou/mirailens](https://github.com/mugenkyou/mirailens)
-- **Security Policy**: [SECURITY.md](https://github.com/mugenkyou/mirailens/blob/main/SECURITY.md)
-- **Threat Model**: [threat_model.md](https://github.com/mugenkyou/mirailens/blob/main/threat_model.md)
-- **Architecture Details**: [docs/architecture.md](https://github.com/mugenkyou/mirailens/blob/main/docs/architecture.md)
-- **Contributing Guide**: [CONTRIBUTING.md](https://github.com/mugenkyou/mirailens/blob/main/CONTRIBUTING.md)
+---
+
+## What is MiraiLens?
+
+MiraiLens sits between Model Context Protocol (MCP) clients (such as Cursor, Claude Desktop, Google Antigravity, or VS Code MCP) and a user's active browser session.
+
+Instead of giving an MCP server direct, unmonitored control over a detached headless browser instance, MiraiLens bridges the MCP protocol to a local Chrome extension over WebSocket. Every action executed by an AI model is subject to local state machine controls, domain policies, real-time user visibility, human takeover, and emergency stop safeguards.
+
+```text
+┌──────────────────────────┐
+│        AI CLIENT         │
+│  Cursor                  │
+│  Claude                  │
+│  Antigravity             │
+│  VS Code / other MCP     │
+│  clients                 │
+└────────────┬─────────────┘
+             │
+             │ MCP (stdio)
+             ▼
+┌──────────────────────────┐
+│  MIRAILENS MCP SERVER    │
+│  Browser tools           │
+│  State management        │
+│  Verification            │
+│  Control                 │
+└────────────┬─────────────┘
+             │
+             │ Local WebSocket (:29100)
+             ▼
+┌──────────────────────────┐
+│   MIRAILENS CONNECTOR    │
+│    Chrome Extension      │
+│  Policy                  │
+│  Human takeover          │
+│  Emergency stop          │
+│  Browser-side control    │
+└────────────┬─────────────┘
+             │
+             ▼
+┌──────────────────────────┐
+│          CHROME          │
+└────────────┬─────────────┘
+             │
+             ▼
+            WEB
+```
 
 ---
 
 ## Why MiraiLens?
 
-Browser agents can perform powerful actions on behalf of users, but direct, unrestricted AI browser control creates a security and accountability problem.
+Browser-capable AI agents can perform complex web tasks on behalf of users, but granting LLMs unconstrained browser control creates serious operational and safety challenges:
 
-The key question is: **"Who is actually in control when the AI starts acting?"**
+* **Real-World Impact**: Actions happen in real user accounts and web environments.
+* **Dynamic Web Pages**: Pages mutate unpredictably, which can cause automation to fail or misfire.
+* **User Intervention**: Users need the ability to monitor actions and take control when sensitive steps occur.
+* **Lack of Boundaries**: Unmonitored automation can perform actions on unexpected domains or sensitive inputs.
+* **Visibility Deficit**: Users require clear audit trails of what actions an AI attempted and completed.
 
-MiraiLens introduces a separate browser-side control layer between the AI client and your browser session. The AI can propose and execute actions only under the supervision of a local client-side state machine.
+MiraiLens is designed around a core engineering principle:
 
-```text
-   AI Agent
-      |
-      | MCP (JSON-RPC)
-      v
-   MiraiLens MCP Server
-      |
-      | Local WebSocket
-      v
-   MiraiLens Connector (Chrome Extension)
-      |
-      +-- Policy checks (Blocked domains, Sensitive fields)
-      +-- Human control (Approve / Deny, Pause, Emergency Stop)
-      +-- Verification (Verify DOM status & URL redirections)
-      +-- Accountability (Append-only local ledger)
-      |
-      v
-   Active Browser Tab
-```
+> **AI should be able to operate the browser without removing the user's ability to observe, interrupt, control, and stop that operation.**
 
 ---
 
-## Key Capabilities
+## Features
 
-### Browser Control
-Provides the AI client with rich, granular automation tools:
-- Navigate tabs, go back, and go forward.
-- Click elements and hover.
-- Type text inputs and select dropdown options.
-- Press keyboard keys and sleep/wait.
-- Capture accessibility ARIA tree snapshots, console logs, and screenshots.
+### 🌐 Browser Interaction
+* `mcp_mirailens_navigate`: Navigate active tab to a target URL.
+* `mcp_mirailens_go_back` & `mcp_mirailens_go_forward`: Navigate browser history.
+* `mcp_mirailens_click`: Click elements by selector or ARIA query.
+* `mcp_mirailens_type`: Type text into specified input fields.
+* `mcp_mirailens_hover`: Hover over specified target elements.
+* `mcp_mirailens_select_option`: Select option(s) in dropdown elements.
+* `mcp_mirailens_press_key`: Send keyboard key events to the active element.
+* `mcp_mirailens_wait`: Pause execution for a specified duration.
 
-### Human Control
-Enables real-time human intervention over active AI runs:
-- Pause and resume AI executions.
-- Take manual control of the browser at any time.
-- Trigger an emergency stop to immediately block active operations.
-- Explicitly approve or deny actions using visual confirmation overlays on the active page.
+### 🔍 Inspection & Diagnostics
+* `mcp_mirailens_snapshot`: Capture accessibility (ARIA) tree snapshots of the page.
+* `mcp_mirailens_screenshot`: Capture full-tab PNG screenshots.
+* `mcp_mirailens_get_console_logs`: Retrieve recent JavaScript console output.
 
-### Browser-Side Policy Enforcement
-Critical security constraints are evaluated inside the browser extension, isolating enforcement rules from the untrusted server and client:
-- **Blocked Domains**: Actions on configured blocked domains are immediately denied.
-- **Sensitive Fields**: Passwords, PINs, CVVs, and payment forms automatically trigger policy blocks or human overlays.
-- **Draft-Only Mode**: Prevents form submissions while allowing inputs to be filled for drafting.
+### 🛡️ Human Control & Governance
+* `get_agent_status`: Inspect control state, connection health, and execution permissions.
+* `pause_agent` / `pause_ai`: Pause AI execution.
+* `resume_agent` / `resume_ai`: Resume AI execution after pause or takeover.
+* `take_control`: Explicitly hand browser control to the human user, blocking AI calls.
+* `return_control`: Return control from human back to the AI agent.
+* `stop_agent` / `emergency_stop`: Emergency stop all active execution.
 
-### Verification
-The extension inspects the target tab's post-action state (verifying changes to element values or URL redirects) and records outcome results as:
-- `VERIFIED`: Target condition succeeded.
-- `FAILED`: Action failed or did not achieve expected state.
-- `UNVERIFIED_COMPLETE`: Action ran but state could not be programmatically evaluated.
+### 🔒 Security Policy
+* `get_policy`: Retrieve current extension security policy settings.
+* `set_policy`: Update trusted/blocked domains and sensitive field handling *(requires browser overlay approval)*.
+* **Sensitive Field Protection**: Automatically masks sensitive fields (`password`, `credit_card`) in logs and enforces `ALWAYS_ASK` or `ALWAYS_DENY` rules.
 
-### Accountability
-Logs execution events in a local, sandboxed, append-only ledger stored in extension storage (`chrome.storage.local`). The ledger tracks:
-- Proposed actions and target selectors.
-- Actor information (`AI` vs `HUMAN`).
-- Human decisions (approved/denied).
-- Execution timestamps, state transitions, and verification outcomes.
-- Values entered in sensitive fields are automatically masked/redacted before writing to the ledger.
+### ⚡ Reliability & Auditability
+* `undo_last`: Revert the last reversible form action executed by the AI.
+* `get_action_history`: Retrieve bounded, filtered execution audit logs.
+* **Action Verification**: Validates DOM mutations before marking actions complete.
 
-### Recovery
-Supports targeted, origin-bound recovery for text input value changes. Snapshots are restricted to non-sensitive fields and expire immediately if the tab URL redirects, navigates, or is closed.
+---
+
+## Human Control Model
+
+MiraiLens enforces a browser-side control state machine between the AI agent and the active browser session:
+
+```text
+  AI CONTROL
+      │
+      ├── User observes action stream
+      ├── User clicks overlay or issues command
+      ▼
+HUMAN CONTROL
+      ├── All AI browser actions blocked immediately
+      └── User returns control when ready
+      ▼
+  AI CONTROL
+```
+
+### Emergency Stop
+Executing `stop_agent` or triggering the extension's emergency stop overlay transitions the system into an `EMERGENCY_STOP` state. All pending and incoming AI commands are persistently blocked until the control state is explicitly reset.
 
 ---
 
 ## Security Model
 
-> **AI can act. You remain in control.**
-
-MiraiLens does **NOT** claim to solve prompt injection. A malicious webpage or injection payload can still manipulate an AI client into requesting a harmful action. Instead, MiraiLens provides an independent browser-side control boundary around the requested action, ensuring no operation runs without human verification or policy matches.
+MiraiLens focuses on **execution safety and browser-side governance**. It does NOT claim to eliminate LLM prompt injection or make arbitrary natural language instructions inherently safe.
 
 ```text
-    Prompt Injection
-          |
-          v
-    AI Requests Action
-          |
-          v
-    MiraiLens Policy / Control Layer
-          |
-          +----> BLOCK (Domain/Sensitive rule matches)
-          |
-          +----> ASK HUMAN (Interactive Shadow DOM confirmation overlay)
-          |
-          +----> EXECUTE
-                   |
-                   v
-                VERIFY (Inspect DOM and active URL)
-                   |
-                   v
-              RECORD RESULT (Write to sandboxed local ledger)
+AI Request ──► MCP Server ──► Chrome Connector ──► Policy / Gate Checks ──► Browser Action
 ```
 
-For more information, please read the [threat_model.md](https://github.com/mugenkyou/mirailens/blob/main/threat_model.md) and [SECURITY.md](https://github.com/mugenkyou/mirailens/blob/main/SECURITY.md) guidelines.
+1. **Local Boundary**: The MCP server and Chrome extension communicate via a local WebSocket (`127.0.0.1:29100`).
+2. **Policy Gates**: Domain whitelists/blacklists and sensitive field rules are checked before dispatching browser commands.
+3. **Execution Masking**: Sensitive input parameters are never stored unmasked in diagnostic logs or history ledgers.
+
+For detailed security disclosures, see [SECURITY.md](SECURITY.md) and [threat_model.md](threat_model.md).
 
 ---
 
 ## Installation
 
-The npm package provides the local MiraiLens MCP server. Start the server directly via `npx`:
+### Quick Start
+
+Run the MCP server via `npx`:
 
 ```bash
-npx mirailens@latest
+npx -y mirailens@latest
 ```
 
-Alternatively, install it locally:
+### Setup Flow
 
-```bash
-npm install -g mirailens
+```text
+1. Install MCP Server  ──►  2. Configure MCP Client  ──►  3. Load Chrome Extension  ──►  4. Connect & Operate
 ```
 
 ---
 
-## Chrome Extension
+## Connect an MCP Client
 
-The **MiraiLens Connector** bridges the MCP server to your active browser environment.
+MiraiLens uses standard MCP over `stdio` and works across major MCP-compliant clients.
 
-1. Install the [MiraiLens Connector](https://chromewebstore.google.com/detail/cjkgpjbjjefoecfbiehiognojjdhofmg) from the Chrome Web Store.
-2. Start the MiraiLens MCP Server using `npx`.
-3. Configure your favorite MCP client (see below).
-4. Click the extension icon and select **CONNECT TO MCP SERVER**.
+### Verified Clients
 
-*Note: For extension development, you can clone the repository and load the `extension` folder as an unpacked extension in `chrome://extensions/`.*
+| Client | Status | Configuration |
+|---|---|---|
+| **Cursor** | Verified | `.cursor/mcp.json` |
+| **Claude Desktop** | Verified | `claude_desktop_config.json` |
+| **Google Antigravity** | Verified | `mcp_config.json` |
+| **MCP Inspector** | Verified | `npx @modelcontextprotocol/inspector npx mirailens@latest` |
+
+#### Cursor Setup
+Add to `.cursor/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "mirailens": {
+      "command": "npx",
+      "args": ["-y", "mirailens@latest"]
+    }
+  }
+}
+```
+
+#### Claude Desktop Setup
+Add to `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "mirailens": {
+      "command": "npx",
+      "args": ["-y", "mirailens@latest"]
+    }
+  }
+}
+```
+
+#### Google Antigravity Setup
+Add to `mcp_config.json`:
+```json
+{
+  "mcpServers": {
+    "mirailens": {
+      "command": "npx",
+      "args": ["-y", "mirailens@latest"]
+    }
+  }
+}
+```
+
+### Compatible Clients
+
+The following clients support standard MCP `stdio` servers:
+* **Claude Code**
+* **VS Code (MCP extension)**
+* **Cline**
+* **Roo Code**
+* **Windsurf**
+* **Gemini CLI**
 
 ---
 
-## Universal MCP Client Configuration
+## Chrome Extension Setup
 
-MiraiLens is client-agnostic and fully standards-compliant with the Model Context Protocol (MCP) JSON-RPC specification over `stdio`. The same MiraiLens installation connects with any compliant MCP client without client-specific hacks.
+1. Locate or download the extension bundle from `extension/` or `mirailens-extension.zip`.
+2. Open Chrome and navigate to `chrome://extensions`.
+3. Enable **Developer mode** in the top right.
+4. Click **Load unpacked** and select the `extension/` directory.
+5. Click the **MiraiLens** extension icon in Chrome to open the control panel and verify connection status on local port `29100`.
 
-### Google Antigravity
-Add MiraiLens in your Antigravity MCP settings or configuration file (`~/.gemini/antigravity-ide/mcp_config.json` or workspace settings):
+---
 
-```json
-{
-  "mcpServers": {
-    "mirailens": {
-      "command": "npx",
-      "args": ["-y", "mirailens@latest"]
-    }
-  }
-}
-```
-
-### Cursor
-Add to your Cursor settings under `Features > MCP Servers` or directly in `mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "mirailens": {
-      "command": "npx",
-      "args": ["-y", "mirailens@latest"]
-    }
-  }
-}
-```
-
-### Claude Desktop
-Add to your `claude_desktop_config.json` (`%APPDATA%\Claude\claude_desktop_config.json` on Windows or `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
-
-```json
-{
-  "mcpServers": {
-    "mirailens": {
-      "command": "npx",
-      "args": ["-y", "mirailens@latest"]
-    }
-  }
-}
-```
-
-### Claude Code (CLI)
-Add using the Claude Code CLI tool:
+## Local Development
 
 ```bash
-claude mcp add mirailens npx -y mirailens@latest
+# 1. Clone repository
+git clone https://github.com/mugenkyou/mirailens.git
+cd mirailens
+
+# 2. Install dependencies
+npm install
+
+# 3. Typecheck TypeScript
+npm run typecheck
+
+# 4. Build bundle
+npm run build
+
+# 5. Run test suite
+npm test
 ```
 
-### VS Code (Cline / Roo Code / Continue)
-Add to your MCP server configuration:
+---
 
-```json
-{
-  "mcpServers": {
-    "mirailens": {
-      "command": "npx",
-      "args": ["-y", "mirailens@latest"]
-    }
-  }
-}
-```
+## Project Structure
 
-### Windsurf
-Add to `~/.codeium/windsurf/mcp_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "mirailens": {
-      "command": "npx",
-      "args": ["-y", "mirailens@latest"]
-    }
-  }
-}
-```
-
-### Gemini CLI
-Add to your Gemini CLI configuration:
-
-```json
-{
-  "mcpServers": {
-    "mirailens": {
-      "command": "npx",
-      "args": ["-y", "mirailens@latest"]
-    }
-  }
-}
-```
-
-### MCP Inspector
-Test and inspect MiraiLens interactively via the official MCP Inspector:
-
-```bash
-npx @modelcontextprotocol/inspector npx -y mirailens@latest
+```text
+mirailens/
+├── src/
+│   ├── index.ts               # CLI & stdio entry point
+│   ├── server.ts              # MCP server setup & tool registration
+│   ├── context.ts             # Application context & WebSocket bridge
+│   ├── ws.ts                  # Local WebSocket server (port 29100)
+│   ├── state-machine.ts       # Control state machine implementation
+│   ├── tools/                 # MCP tool implementations
+│   │   ├── common.ts          # Navigation & wait tools
+│   │   ├── custom.ts          # Console logs & screenshot tools
+│   │   ├── snapshot.ts        # ARIA snapshot & interaction tools
+│   │   └── control.ts         # Governance & control tools
+│   └── utils/                 # Logging, formatting & helper functions
+├── extension/                 # Chrome extension (Manifest V3)
+│   ├── manifest.json          # Extension manifest
+│   ├── background.js          # Service worker & WebSocket client
+│   ├── content.js             # DOM content script
+│   ├── popup.html             # Extension popup UI
+│   └── overlay.js             # On-screen human control overlay
+├── tests/                     # Node.js test suite
+├── docs/                      # Technical documentation
+├── .github/workflows/         # GitHub Actions CI/CD workflows
+├── package.json               # Package configuration
+├── SECURITY.md                # Security policy & vulnerability reporting
+├── threat_model.md            # Threat model documentation
+└── LICENSE                    # Project license
 ```
 
 ---
 
 ## Technical Architecture
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                       MCP CLIENTS                           │
-│  [Google Antigravity]  [Cursor]  [Claude]  [VS Code]  [...] │
-└──────────────────────────────┬──────────────────────────────┘
-                               │ MCP stdio (Strict JSON-RPC)
-                               │ (All diagnostic logs -> stderr)
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    MIRAILENS MCP SERVER                     │
-│  • Stdio JSON-RPC Transport & Message Framing               │
-│  • Authoritative State Tracking (MCP / Extension / Tab)     │
-│  • Safe Non-Blocking Port Management (Port 29100)           │
-│  • Bounded WebSocket Communication & Error Handling         │
-└──────────────────────────────┬──────────────────────────────┘
-                               │ WebSocket (JSON-RPC)
-                               │ (Connect / Reconnect / Heartbeat)
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  MIRAILENS CONNECTOR EXTENSION              │
-│  • State Machine: IDLE, RUNNING, HUMAN_CONTROLLED, BLOCKED  │
-│  • Security Policy Gate (Blocked Domains, Sensitive Fields) │
-│  • Human Intervention (Approve / Deny, Pause, Stop)         │
-│  • Post-Action DOM & Navigation Verification                │
-│  • Tamper-Evident Sandboxed Action Ledger                   │
-└──────────────────────────────┬──────────────────────────────┘
-                               │ Chromium MV3 APIs
-                               ▼
-                        [Browser Tabs / Web]
-```
-
-- **MCP Client**: Formulates intents and proposes browser actions over stdio.
-- **MCP Server**: Coordinates stdio streams, ensures stdout remains 100% clean protocol traffic, and communicates with the Chrome extension over WebSocket.
-- **Browser Extension**: Authoritative client-side security authority; evaluates policies, prompts for confirmation, verifies states, and records audits.
-- **Browser Tab DOM**: Executes supported automation scripts and renders confirmation overlays.
-
-For structural details, see [docs/architecture.md](https://github.com/mugenkyou/mirailens/blob/main/docs/architecture.md).
+* **Protocol Bridge**: Concurrently manages MCP JSON-RPC over `stdio` and WebSocket JSON messages over `ws://127.0.0.1:29100`.
+* **State Machine**: Enforces valid control state transitions (`IDLE`, `AGENT_RUNNING`, `HUMAN_CONTROL`, `BLOCKED`, `EMERGENCY_STOP`, `VERIFYING`).
+* **Policy Engine**: Checks domain authority and sensitive field protection before permitting tool execution.
+* **Verification & Recovery**: Captures pre- and post-action DOM states to verify execution outcomes and support `undo_last` form state rollbacks.
+* **Audit Ledger**: Stores structured event history locally for accountability and auditing.
 
 ---
 
-## Client Compatibility Matrix
+## Testing
 
-| MCP Client | Transport | Tested Status | Extension Compatibility |
-| :--- | :--- | :--- | :--- |
-| **Google Antigravity** | stdio | **Tested & Verified** | Seamless |
-| **Cursor** | stdio | **Tested & Verified** | Seamless |
-| **MCP Inspector** | stdio | **Tested & Verified** | Seamless |
-| **Claude Desktop** | stdio | **Tested & Verified** | Seamless |
-| **Claude Code** | stdio | **Compatible** | Seamless |
-| **VS Code (MCP / Cline / Roo)** | stdio | **Compatible** | Seamless |
-| **Windsurf** | stdio | **Compatible** | Seamless |
-| **Gemini CLI** | stdio | **Compatible** | Seamless |
-
-### Web Browsers
-- **Google Chrome / Chromium**: Fully Supported (Recommended).
-- **Microsoft Edge**: Fully Supported.
-- **Brave / Arc / Vivaldi**: Fully Supported.
-- **Mozilla Firefox**: Not currently supported (extension relies on Chromium-specific MV3 scripting namespace APIs).
-
----
-
-## Protocol Compatibility
-
-The server communication protocol is frozen at version **v1.0**. All future patch releases in the v1.2.x series maintain backward compatibility with v1.0 clients.
-
-
----
-
-## Development
+Run the automated test suite locally:
 
 ```bash
-# Clone the repository
-git clone https://github.com/mugenkyou/mirailens.git
-cd mirailens
-
-# Clean dependency installation
-npm ci
-
-# Perform type checks
-npm run typecheck
-
-# Build the server target
-npm run build
-
-# Run the test runner
 npm test
-
-# Dry-run package inspection
-npm pack --dry-run
 ```
+
+The test suite validates:
+1. **Stdio Safety**: Ensures zero non-JSON-RPC output on `stdout` to maintain protocol integrity.
+2. **Port Management**: Tests local port binding and fallback mechanisms for port `29100`.
+3. **WebSocket Lifecycle**: Verifies connection handshakes, heartbeats, and graceful disconnection.
+4. **State Machine Integrity**: Validates control state transitions and blocking behavior.
+5. **Security Gate**: Tests domain whitelists/blacklists, sensitive field masking, and replay tokens.
+6. **Accountability Suite**: Tests audit record generation, query filtering, and history storage.
+7. **Release Hardening**: Validates package metadata, binary permissions, and extension asset structure.
+
+---
+
+## Compatibility Matrix
+
+| Client / Environment | Status | MCP Transport |
+|---|---|---|
+| Cursor | Verified | stdio |
+| Claude Desktop | Verified | stdio |
+| Google Antigravity | Verified | stdio |
+| MCP Inspector | Verified | stdio |
+| Claude Code | Compatible | stdio |
+| VS Code MCP | Compatible | stdio |
+| Cline | Compatible | stdio |
+| Roo Code | Compatible | stdio |
+| Windsurf | Compatible | stdio |
+| Gemini CLI | Compatible | stdio |
+
+---
+
+## Limitations
+
+* **Browser Scope**: Requires Chrome or Chromium-based browsers supporting Manifest V3 extensions.
+* **Prompt Injection**: Governs execution safety and control boundaries; does not inspect or prevent adversarial reasoning inside the LLM itself.
+* **Sensitive Inputs**: Passwords and secret fields are excluded from recovery snapshot storage and masked in logs by design.
+* **Single Active Session**: Designed for supervising a single active browser session per MCP server instance.
+
+---
+
+## Roadmap
+
+Future engineering directions under consideration:
+* Chrome Web Store & Firefox Add-ons packaging
+* Multi-tab concurrent state tracking
+* Granular DOM mutation verification rules
+* Configurable policy export and import formats
 
 ---
 
 ## Contributing
 
-For coding conventions and pull request rules, see [CONTRIBUTING.md](https://github.com/mugenkyou/mirailens/blob/main/CONTRIBUTING.md). Security issues must be reported privately following [SECURITY.md](https://github.com/mugenkyou/mirailens/blob/main/SECURITY.md).
+Contributions are welcome! Please review [CONTRIBUTING.md](CONTRIBUTING.md) before submitting pull requests.
+
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature/improvement`).
+3. Commit your changes.
+4. Verify tests (`npm run typecheck && npm run build && npm test`).
+5. Open a Pull Request.
 
 ---
 
 ## License
 
-Distributed under the **MiraiLens Community Non-Commercial License, Version 1.0**. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the [MiraiLens Community Non-Commercial License 1.0](LICENSE).
 
 ---
 
-<p align="center">
-  <strong>MiraiLens</strong><br>
-  <em>"Watch it. Interrupt it. Control it. Trust it."</em>
-</p>
+## Maintainers
 
-<p align="center">
-  <a href="https://mirailens.vercel.app">Website</a> |
-  <a href="https://chromewebstore.google.com/detail/cjkgpjbjjefoecfbiehiognojjdhofmg">Chrome Extension</a> |
-  <a href="https://www.npmjs.com/package/mirailens">npm</a> |
-  <a href="https://github.com/mugenkyou/mirailens">GitHub</a>
-</p>
+* **Sachin Patel** — Developer / Project Creator ([GitHub](https://github.com/mugenkyou))
+* **Rohit Mohan** — Developer ([GitHub](https://github.com/imrohit44))

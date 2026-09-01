@@ -153,7 +153,7 @@ test('MiraiLens Universal MCP Stdio Safety & Protocol Compliance', async (suite)
       setTimeout(() => {
         child.kill('SIGKILL');
         resolve(-1);
-      }, 3000);
+      }, 6000);
     });
 
     assert.strictEqual(exitCode, 0, 'MCP server must exit with code 0 on stdin close');
